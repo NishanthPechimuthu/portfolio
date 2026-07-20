@@ -77,14 +77,25 @@ router.post("/login", authLimiter, async (req: Request, res: Response) => {
     const { username, password } = loginSchema.parse(req.body);
 
     const cleanUsername = username.trim();
-    const usernamePrefix = cleanUsername.includes("@") ? cleanUsername.split("@")[0] : cleanUsername;
+    const envUsername = (process.env.ADMIN_USERNAME || "admin").trim();
+    const envEmail = (process.env.ADMIN_EMAIL || "").trim();
+    const envPassword = process.env.ADMIN_PASSWORD;
 
-    // Search by exact username, prefix before @, or first admin user as fallback
+    const usernamePrefix = cleanUsername.includes("@") ? cleanUsername.split("@")[0] : cleanUsername;
+    const isEnvMatch =
+      cleanUsername === envUsername ||
+      cleanUsername === envEmail ||
+      (envEmail.length > 0 && cleanUsername === envEmail.split("@")[0]) ||
+      usernamePrefix === envUsername ||
+      (envEmail.length > 0 && usernamePrefix === envEmail.split("@")[0]);
+
+    // Search DB by exact username or prefix before @
     let user = await prisma.adminUser.findFirst({
       where: {
         OR: [
           { username: cleanUsername },
           { username: usernamePrefix },
+          { username: envUsername },
         ],
       },
     });
@@ -93,7 +104,28 @@ router.post("/login", authLimiter, async (req: Request, res: Response) => {
       user = await prisma.adminUser.findFirst();
     }
 
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    let isPasswordValid = false;
+    if (user) {
+      isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    }
+
+    // Fallback: Check against .env ADMIN_PASSWORD if DB hash doesn't match or DB user missing
+    if (!isPasswordValid && envPassword && password === envPassword && (isEnvMatch || !user)) {
+      isPasswordValid = true;
+      const newHash = await bcrypt.hash(envPassword, 10);
+      if (user) {
+        user = await prisma.adminUser.update({
+          where: { id: user.id },
+          data: { passwordHash: newHash, username: envUsername || user.username },
+        });
+      } else {
+        user = await prisma.adminUser.create({
+          data: { username: envUsername || "np", passwordHash: newHash },
+        });
+      }
+    }
+
+    if (!user || !isPasswordValid) {
       res.status(401).json({ error: "Invalid username or password" });
       return;
     }
