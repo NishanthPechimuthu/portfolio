@@ -91,7 +91,7 @@ router.get("/projects", async (req: Request, res: Response) => {
 router.get("/projects/:slug", async (req: Request, res: Response) => {
   try {
     const project = await prisma.project.findUnique({
-      where: { slug: req.params.slug },
+      where: { slug: req.params.slug as string },
       include: { tags: true },
     });
     if (!project) { res.status(404).json({ error: "Project not found" }); return; }
@@ -130,7 +130,7 @@ router.get("/blog", async (req: Request, res: Response) => {
 router.get("/blog/:slug", async (req: Request, res: Response) => {
   try {
     const post = await prisma.blogPost.findUnique({
-      where: { slug: req.params.slug, isPublished: true },
+      where: { slug: req.params.slug as string, isPublished: true },
       include: { category: true },
     });
     if (!post) { res.status(404).json({ error: "Post not found" }); return; }
@@ -149,7 +149,7 @@ router.post("/blog/:slug/view", async (req: Request, res: Response) => {
     if (req.cookies[cookieKey]) {
       // Already viewed — return current count without incrementing
       const post = await prisma.blogPost.findUnique({
-        where: { slug: req.params.slug },
+        where: { slug: req.params.slug as string },
         select: { views: true },
       });
       res.json({ views: post?.views ?? 0, counted: false });
@@ -157,7 +157,7 @@ router.post("/blog/:slug/view", async (req: Request, res: Response) => {
     }
 
     const updated = await prisma.blogPost.update({
-      where: { slug: req.params.slug },
+      where: { slug: req.params.slug as string },
       data: { views: { increment: 1 } },
       select: { views: true },
     });
@@ -203,7 +203,7 @@ router.post("/contact", async (req: Request, res: Response) => {
 // GET /api/public/share/:key
 router.get("/share/:key", async (req: Request, res: Response) => {
   try {
-    const file = await prisma.sharedFile.findUnique({ where: { fileKey: req.params.key } });
+    const file = await prisma.sharedFile.findUnique({ where: { fileKey: req.params.key as string } });
     if (!file) { res.status(404).json({ error: "File not found" }); return; }
     if (new Date() > file.expiresAt) {
       const fp = path.join(process.env.UPLOAD_DIR || "./uploads", file.filename);
@@ -226,7 +226,7 @@ router.get("/share/:key", async (req: Request, res: Response) => {
 // POST /api/public/share/:key/download
 router.post("/share/:key/download", async (req: Request, res: Response) => {
   try {
-    const file = await prisma.sharedFile.findUnique({ where: { fileKey: req.params.key } });
+    const file = await prisma.sharedFile.findUnique({ where: { fileKey: req.params.key as string } });
     if (!file) { res.status(404).json({ error: "File not found" }); return; }
     if (new Date() > file.expiresAt) { res.status(410).json({ error: "File has expired" }); return; }
 
@@ -261,7 +261,7 @@ router.get("/nav", async (_req: Request, res: Response) => {
 });
 
 // GET /api/public/resume/download
-router.get("/resume/download", async (_req: Request, res: Response) => {
+router.get("/resume/download", async (req: Request, res: Response) => {
   try {
     const latexSetting = await prisma.siteSetting.findUnique({ where: { settingKey: "resume_latex" } });
     const latexCode = latexSetting?.settingValue;

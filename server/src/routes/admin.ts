@@ -449,7 +449,7 @@ router.put("/media/rename", async (req: Request, res: Response) => {
 });
 
 router.delete("/media/:filename", (req: Request, res: Response) => {
-  const safe = path.basename(decodeURIComponent(req.params.filename));
+  const safe = path.basename(decodeURIComponent(req.params.filename as string));
   const fp = path.join(process.env.UPLOAD_DIR || "./uploads", safe);
   if (fs.existsSync(fp)) { fs.unlinkSync(fp); res.json({ success: true }); }
   else { res.status(404).json({ error: "File not found" }); }
