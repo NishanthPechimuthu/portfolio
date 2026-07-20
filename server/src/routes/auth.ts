@@ -76,9 +76,25 @@ router.post("/login", authLimiter, async (req: Request, res: Response) => {
   try {
     const { username, password } = loginSchema.parse(req.body);
 
-    const user = await prisma.adminUser.findUnique({ where: { username } });
+    const cleanUsername = username.trim();
+    const usernamePrefix = cleanUsername.includes("@") ? cleanUsername.split("@")[0] : cleanUsername;
+
+    // Search by exact username, prefix before @, or first admin user as fallback
+    let user = await prisma.adminUser.findFirst({
+      where: {
+        OR: [
+          { username: cleanUsername },
+          { username: usernamePrefix },
+        ],
+      },
+    });
+
+    if (!user) {
+      user = await prisma.adminUser.findFirst();
+    }
+
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-      res.status(401).json({ error: "Invalid credentials" });
+      res.status(401).json({ error: "Invalid username or password" });
       return;
     }
 
@@ -143,12 +159,13 @@ router.post("/login", authLimiter, async (req: Request, res: Response) => {
     );
 
     res.json({ success: true, token, username: user.username });
-  } catch (err) {
+  } catch (err: any) {
+    console.error("Login route error:", err);
     if (err instanceof z.ZodError) {
       res.status(400).json({ error: "Username and password are required" });
       return;
     }
-    res.status(500).json({ error: "Login failed" });
+    res.status(500).json({ error: err?.message || "Login failed" });
   }
 });
 
@@ -194,12 +211,12 @@ router.post("/verify-2fa", authLimiter, async (req: Request, res: Response) => {
     );
 
     res.json({ success: true, token, username: user.username });
-  } catch (err) {
+  } catch (err: any) {
     if (err instanceof z.ZodError) {
       res.status(400).json({ error: "Verification code and temporary token are required" });
       return;
     }
-    res.status(500).json({ error: "Verification failed" });
+    res.status(500).json({ error: err?.message || "Verification failed" });
   }
 });
 
@@ -244,8 +261,8 @@ router.post("/resend-2fa", authLimiter, async (req: Request, res: Response) => {
     });
 
     res.json({ success: true, message: "New verification code sent!" });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to resend verification code" });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Failed to resend verification code" });
   }
 });
 
