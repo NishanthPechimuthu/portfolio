@@ -509,7 +509,7 @@ export default function HomePage() {
                 </div>
                 {Boolean(t.quote) && <p className="text-sm text-muted-foreground leading-relaxed mb-6 italic flex-1">"{t.quote as string}"</p>}
                 <footer className="flex items-center gap-3 pt-4 border-t border-border">
-                  {t.authorImage && (
+                  {Boolean(t.authorImage) && (
                     <img src={t.authorImage as string} alt={t.authorName as string} className="w-10 h-10 rounded-full object-cover" loading="lazy" />
                   )}
                   <div>
@@ -548,7 +548,7 @@ export default function HomePage() {
                       <div>
                         <h4 className="font-bold text-xl md:text-2xl leading-tight">{exp.title as string}</h4>
                         <p className="text-brand font-medium mt-1">
-                          {exp.company as string} {exp.location && `• ${exp.location}`}
+                          {exp.company as string} {Boolean(exp.location) && `• ${exp.location}`}
                         </p>
                       </div>
                     </div>

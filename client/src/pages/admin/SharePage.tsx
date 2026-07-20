@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useRef } from 'react'
-import { Share2, Trash2, Link as LinkIcon, Plus, Copy, Check, Lock } from 'lucide-react'
+import { Share2, Trash2, Link as LinkIcon, Plus, Check, Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import api from '@/lib/api'
 import { formatBytes, formatDate } from '@/lib/utils'
@@ -133,7 +133,7 @@ export default function SharePage() {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-white flex items-center gap-2 mb-1">
                     {file.originalName}
-                    {file.isProtected && <Lock className="w-3.5 h-3.5 text-yellow-500" title="Password Protected" />}
+                    {file.isProtected && <span title="Password Protected"><Lock className="w-3.5 h-3.5 text-yellow-500" /></span>}
                     {isExpired && <span className="text-xs bg-red-500/20 text-red-500 px-2 py-0.5 rounded-full">Expired</span>}
                   </h3>
                   <div className="flex items-center gap-4 text-sm text-zinc-400">

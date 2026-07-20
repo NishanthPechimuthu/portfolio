@@ -1,9 +1,9 @@
 import { Navigate, Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import {
-  LayoutDashboard, Settings, Palette, Home, Briefcase, MessageSquare,
+  LayoutDashboard, Settings, Palette, Home, Briefcase,
   BookOpen, GraduationCap, Award, Wrench, User, Star, Zap, Share2,
-  Image, Mail, LogOut, Menu, X, Link as LinkIcon, Navigation
+  Image, Mail, LogOut, Menu, Link as LinkIcon, Navigation
 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
