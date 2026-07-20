@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://nishanth.qzz.io/api/public/sitemap.xml

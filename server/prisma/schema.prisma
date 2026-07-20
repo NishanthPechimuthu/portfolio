@@ -1,0 +1,324 @@
+// Prisma Schema — Portfolio 2.0
+// Maps every table from the PHP project + adds blog view tracking
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Admin Users ──────────────────────────────────────────────────────────────
+model AdminUser {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique @db.VarChar(100)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("admin_users")
+}
+
+// ── Site Settings (key-value store) ─────────────────────────────────────────
+model SiteSetting {
+  settingKey   String  @id @map("setting_key") @db.VarChar(100)
+  settingValue String? @map("setting_value") @db.Text
+
+  @@map("site_settings")
+}
+
+// ── Theme Settings ───────────────────────────────────────────────────────────
+model ThemeSetting {
+  id               Int    @id @default(1)
+  accentColor      String @default("#FF6B2B") @map("accent_color") @db.VarChar(20)
+  accentLightColor String @default("#FF8F5C") @map("accent_light_color") @db.VarChar(20)
+  displayFont      String @default("Inter") @map("display_font") @db.VarChar(100)
+  bodyFont         String @default("Inter") @map("body_font") @db.VarChar(100)
+  googleFontsUrl   String @default("") @map("google_fonts_url") @db.VarChar(500)
+
+  @@map("theme_settings")
+}
+
+// ── Hero Section ─────────────────────────────────────────────────────────────
+model Hero {
+  id                 Int    @id @default(1)
+  availabilityText   String @default("Available for work") @map("availability_text") @db.VarChar(200)
+  headline           String @default("Hi, I'm <span>Nishanth</span>") @db.VarChar(500)
+  subheadline        String @default("") @db.Text
+  heroImage          String @default("") @map("hero_image") @db.VarChar(500)
+  badgeText          String @default("Open to projects") @map("badge_text") @db.VarChar(100)
+  ctaPrimaryText     String @default("View my work") @map("cta_primary_text") @db.VarChar(100)
+  ctaPrimaryUrl      String @default("#work") @map("cta_primary_url") @db.VarChar(255)
+  ctaSecondaryText   String @default("Get in touch") @map("cta_secondary_text") @db.VarChar(100)
+  ctaSecondaryUrl    String @default("#contact") @map("cta_secondary_url") @db.VarChar(255)
+  showProjectsStat   Boolean @default(true) @map("show_projects_stat")
+  showClientsStat    Boolean @default(true) @map("show_clients_stat")
+  showExperienceStat Boolean @default(true) @map("show_experience_stat")
+
+  stats HeroStat[]
+
+  @@map("hero")
+}
+
+model HeroStat {
+  id        Int     @id @default(autoincrement())
+  heroId    Int     @default(1) @map("hero_id")
+  statValue String  @map("stat_value") @db.VarChar(20)
+  statLabel String  @map("stat_label") @db.VarChar(100)
+  sortOrder Int     @default(0) @map("sort_order")
+  isVisible Boolean @default(true) @map("is_visible")
+
+  hero Hero @relation(fields: [heroId], references: [id], onDelete: Cascade)
+
+  @@map("hero_stats")
+}
+
+// ── Navigation Menu ──────────────────────────────────────────────────────────
+model NavMenu {
+  id        Int     @id @default(autoincrement())
+  label     String  @db.VarChar(100)
+  url       String  @db.VarChar(255)
+  sortOrder Int     @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+
+  @@map("nav_menu")
+}
+
+// ── Services ─────────────────────────────────────────────────────────────────
+model Service {
+  id          Int     @id @default(autoincrement())
+  title       String  @db.VarChar(200)
+  description String? @db.Text
+  iconSvg     String? @map("icon_svg") @db.Text
+  sortOrder   Int     @default(0) @map("sort_order")
+  isFeatured  Boolean @default(true) @map("is_featured")
+  isVisible   Boolean @default(true) @map("is_visible")
+  cardStyle   String  @default("light") @map("card_style") @db.VarChar(20)
+
+  @@map("services")
+}
+
+// ── Projects ─────────────────────────────────────────────────────────────────
+model Project {
+  id            Int      @id @default(autoincrement())
+  title         String   @db.VarChar(200)
+  slug          String   @unique @db.VarChar(200)
+  description   String?  @db.Text
+  content       String?  @db.Text
+  category      String?  @db.VarChar(50)
+  featuredImage String?  @map("featured_image") @db.VarChar(500)
+  liveUrl       String?  @map("live_url") @db.VarChar(500)
+  sourceUrl     String?  @map("source_url") @db.VarChar(500)
+  showLive      Boolean  @default(true) @map("show_live")
+  showSource    Boolean  @default(true) @map("show_source")
+  isFeatured    Boolean  @default(false) @map("is_featured")
+  sortOrder     Int      @default(0) @map("sort_order")
+  year          String?  @db.VarChar(10)
+  clientName    String?  @map("client_name") @db.VarChar(100)
+  roleTitle     String?  @map("role_title") @db.VarChar(100)
+  timeline      String?  @db.VarChar(100)
+  deliverables  String?  @db.VarChar(200)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  tags ProjectTag[]
+
+  @@index([slug])
+  @@index([isFeatured])
+  @@map("projects")
+}
+
+model ProjectTag {
+  id        Int    @id @default(autoincrement())
+  projectId Int    @map("project_id")
+  tagName   String @map("tag_name") @db.VarChar(50)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_tags")
+}
+
+// ── About Section ────────────────────────────────────────────────────────────
+model About {
+  id         Int    @id @default(1)
+  subtitle   String @default("About me") @db.VarChar(200)
+  title      String @default("A bit about<br>who I am") @db.VarChar(300)
+  paragraph1 String @default("") @db.Text
+  paragraph2 String @default("") @db.Text
+  image      String @default("") @db.VarChar(500)
+
+  @@map("about")
+}
+
+// ── Skills ───────────────────────────────────────────────────────────────────
+model Skill {
+  id           Int     @id @default(autoincrement())
+  name         String  @db.VarChar(100)
+  isFeatured   Boolean @default(true) @map("is_featured")
+  iconType     String  @default("class") @map("icon_type") @db.VarChar(10)
+  iconNetwork  String  @default("fontawesome") @map("icon_network") @db.VarChar(50)
+  iconClass    String  @default("") @map("icon_class") @db.VarChar(100)
+  iconImage    String  @default("") @map("icon_image") @db.VarChar(500)
+  sortOrder    Int     @default(0) @map("sort_order")
+
+  @@map("skills")
+}
+
+// ── Testimonials ─────────────────────────────────────────────────────────────
+model Testimonial {
+  id            Int     @id @default(autoincrement())
+  quote         String  @db.Text
+  authorName    String  @map("author_name") @db.VarChar(100)
+  authorTitle   String? @map("author_title") @db.VarChar(100)
+  authorCompany String? @map("author_company") @db.VarChar(100)
+  authorImage   String? @map("author_image") @db.VarChar(500)
+  rating        Int     @default(5)
+  isFeatured    Boolean @default(true) @map("is_featured")
+  sortOrder     Int     @default(0) @map("sort_order")
+  cardStyle     String  @default("light") @map("card_style") @db.VarChar(20)
+
+  @@map("testimonials")
+}
+
+// ── Experience ───────────────────────────────────────────────────────────────
+model Experience {
+  id          Int     @id @default(autoincrement())
+  title       String  @db.VarChar(200)
+  company     String? @db.VarChar(200)
+  location    String? @db.VarChar(100)
+  period      String? @db.VarChar(100)
+  description String? @db.Text
+  isCurrent   Boolean @default(false) @map("is_current")
+  sortOrder   Int     @default(0) @map("sort_order")
+  logo        String  @default("") @db.VarChar(500)
+
+  @@map("experience")
+}
+
+// ── Education ────────────────────────────────────────────────────────────────
+model Education {
+  id          Int     @id @default(autoincrement())
+  title       String  @db.VarChar(200)
+  institution String? @db.VarChar(200)
+  period      String? @db.VarChar(100)
+  grade       String? @db.VarChar(100)
+  isCurrent   Boolean @default(false) @map("is_current")
+  sortOrder   Int     @default(0) @map("sort_order")
+  logo        String  @default("") @db.VarChar(500)
+
+  @@map("education")
+}
+
+// ── Certificates ─────────────────────────────────────────────────────────────
+model Certificate {
+  id            Int     @id @default(autoincrement())
+  title         String  @db.VarChar(200)
+  issuer        String  @db.VarChar(200)
+  issueDate     String? @map("issue_date") @db.VarChar(100)
+  credentialId  String? @map("credential_id") @db.VarChar(200)
+  credentialUrl String? @map("credential_url") @db.VarChar(500)
+  imageUrl      String? @map("image_url") @db.VarChar(500)
+  logo          String  @default("") @db.VarChar(500)
+  category      String  @default("coursera") @db.VarChar(50)
+  skills        String? @db.VarChar(500)
+  isFeatured    Boolean @default(false) @map("is_featured")
+  sortOrder     Int     @default(0) @map("sort_order")
+
+  @@map("certificates")
+}
+
+// ── Blog Categories ──────────────────────────────────────────────────────────
+model BlogCategory {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(50)
+  slug String @unique @db.VarChar(50)
+
+  posts BlogPost[]
+
+  @@map("blog_categories")
+}
+
+// ── Blog Posts ───────────────────────────────────────────────────────────────
+model BlogPost {
+  id              Int          @id @default(autoincrement())
+  title           String       @db.VarChar(300)
+  slug            String       @unique @db.VarChar(300)
+  excerpt         String?      @db.Text
+  content         String?      @db.Text
+  categoryId      Int?         @map("category_id")
+  featuredImage   String?      @map("featured_image") @db.VarChar(500)
+  author          String       @default("Nishanth") @db.VarChar(100)
+  authorImage     String?      @map("author_image") @db.VarChar(500)
+  authorTitle     String?      @map("author_title") @db.VarChar(200)
+  readTime        String       @default("5 min read") @map("read_time") @db.VarChar(20)
+  isFeatured      Boolean      @default(false) @map("is_featured")
+  isPublished     Boolean      @default(true) @map("is_published")
+  metaTitle       String?      @map("meta_title") @db.VarChar(200)
+  metaKeywords    String?      @map("meta_keywords") @db.VarChar(500)
+  metaDescription String?      @map("meta_description") @db.Text
+  views           Int          @default(0)
+  publishedAt     DateTime?    @map("published_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  category BlogCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([slug])
+  @@index([isPublished, publishedAt])
+  @@map("blog_posts")
+}
+
+// ── Contact Section ──────────────────────────────────────────────────────────
+model ContactSection {
+  id          Int    @id @default(1)
+  subtitle    String @default("Get in touch") @db.VarChar(200)
+  title       String @default("Let's work<br>together") @db.VarChar(300)
+  description String @default("") @db.Text
+
+  @@map("contact_section")
+}
+
+// ── Contact Info (Social Links) ──────────────────────────────────────────────
+model ContactInfo {
+  id            Int    @id @default(autoincrement())
+  type          String @db.VarChar(50)
+  label         String @db.VarChar(200)
+  url           String @db.VarChar(500)
+  iconType      String @default("class") @map("icon_type") @db.VarChar(10)
+  iconNetwork   String @default("fontawesome") @map("icon_network") @db.VarChar(50)
+  iconClass     String @default("") @map("icon_class") @db.VarChar(100)
+  iconImage     String @default("") @map("icon_image") @db.VarChar(500)
+  iconSvg       String @default("") @map("icon_svg") @db.Text
+  sortOrder     Int    @default(0) @map("sort_order")
+
+  @@map("contact_info")
+}
+
+// ── Contact Messages ─────────────────────────────────────────────────────────
+model ContactMessage {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(100)
+  email     String   @db.VarChar(200)
+  subject   String?  @db.VarChar(300)
+  message   String   @db.Text
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("contact_messages")
+}
+
+// ── Shared Files (Temp Share) ────────────────────────────────────────────────
+model SharedFile {
+  id           Int      @id @default(autoincrement())
+  fileKey      String   @unique @map("file_key") @db.VarChar(100)
+  filename     String   @db.VarChar(255)
+  originalName String   @map("original_name") @db.VarChar(255)
+  fileSize     Int      @map("file_size")
+  passwordHash String?  @map("password_hash") @db.VarChar(255)
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([fileKey])
+  @@index([expiresAt])
+  @@map("shared_files")
+}

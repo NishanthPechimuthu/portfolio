@@ -1,0 +1,37 @@
+# ── Environment files (NEVER commit these) ──
+.env
+.env.local
+.env.development
+.env.production
+server/.env
+client/.env.local
+
+# ── Dependencies ────────────────────────────
+node_modules/
+server/node_modules/
+client/node_modules/
+
+# ── Build outputs ───────────────────────────
+client/dist/
+client/.vite/
+server/dist/
+
+# ── Uploads / user files ────────────────────
+server/uploads/
+
+# ── Logs ────────────────────────────────────
+server/logs/
+*.log
+
+# ── Prisma ──────────────────────────────────
+# Keep schema.prisma and migrations tracked
+# Ignore generated client
+server/node_modules/.prisma/
+
+# ── OS ──────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ─────────────────────────────────────
+.vscode/settings.json
+.idea/
