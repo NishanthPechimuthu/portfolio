@@ -83,6 +83,11 @@ app.use(`${apiPrefix}/auth`, authRoutes);
 app.use(`${apiPrefix}/public`, publicRoutes);
 app.use(`${apiPrefix}/admin`, adminRoutes);
 
+// Fallback direct mounts for reverse-proxies or VITE_API_URL without /api suffix
+app.use("/auth", authRoutes);
+app.use("/public", publicRoutes);
+app.use("/admin", adminRoutes);
+
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((_req, res) => {
   res.status(404).json({ error: "Route not found" });
