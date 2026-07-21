@@ -130,8 +130,8 @@ router.post("/login", authLimiter, async (req: Request, res: Response) => {
       return;
     }
 
-    // Check if 2FA is required (default enabled unless explicitly ENABLE_2FA=false)
-    const is2FAEnabled = process.env.ENABLE_2FA !== "false";
+    // Check if 2FA is required (only enabled if ENABLE_2FA=true in .env)
+    const is2FAEnabled = process.env.ENABLE_2FA === "true";
 
     if (is2FAEnabled) {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
