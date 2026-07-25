@@ -95,22 +95,17 @@ router.post("/login", authLimiter, async (req: Request, res: Response) => {
         OR: [
           { username: cleanUsername },
           { username: usernamePrefix },
-          { username: envUsername },
         ],
       },
     });
-
-    if (!user) {
-      user = await prisma.adminUser.findFirst();
-    }
 
     let isPasswordValid = false;
     if (user) {
       isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     }
 
-    // Fallback: Check against .env ADMIN_PASSWORD if DB hash doesn't match or DB user missing
-    if (!isPasswordValid && envPassword && password === envPassword && (isEnvMatch || !user)) {
+    // Fallback: Check against .env ADMIN_PASSWORD if username matches env AND (password matches or DB user missing)
+    if (!isPasswordValid && envPassword && password === envPassword && isEnvMatch) {
       isPasswordValid = true;
       const newHash = await bcrypt.hash(envPassword, 10);
       if (user) {
@@ -233,14 +228,18 @@ router.post("/verify-2fa", authLimiter, async (req: Request, res: Response) => {
       return;
     }
 
-    const userId = pending?.userId || 1;
-    if (tempToken) pendingOTPs.delete(tempToken);
-
-    const user = await prisma.adminUser.findUnique({ where: { id: userId } });
+    let userId = pending?.userId;
+    let user = userId ? await prisma.adminUser.findUnique({ where: { id: userId } }) : null;
     if (!user) {
-      res.status(404).json({ error: "User not found" });
+      user = await prisma.adminUser.findFirst();
+    }
+
+    if (!user) {
+      res.status(404).json({ error: "User account not found" });
       return;
     }
+
+    if (tempToken) pendingOTPs.delete(tempToken);
 
     const token = jwt.sign(
       { id: user.id, username: user.username },

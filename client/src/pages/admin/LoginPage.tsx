@@ -31,9 +31,10 @@ export default function AdminLoginPage() {
         setStep(2)
         toast.info(data.message || 'Verification code sent to your email')
       } else if (data.token) {
-        login(data.token, data.username)
+        const userDisplayName = data.username || username || 'Admin'
+        login(data.token, userDisplayName)
         navigate('/admin')
-        toast.success('Welcome back, ' + data.username)
+        toast.success('Welcome back, ' + userDisplayName)
       }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } }).response?.data?.error || 'Login failed'
@@ -53,9 +54,10 @@ export default function AdminLoginPage() {
     try {
       const { data } = await api.post('/auth/verify-2fa', { tempToken, code: code.trim() })
       if (data.token) {
-        login(data.token, data.username)
+        const userDisplayName = data.username || username || 'Admin'
+        login(data.token, userDisplayName)
         navigate('/admin')
-        toast.success('Welcome back, ' + data.username)
+        toast.success('Welcome back, ' + userDisplayName)
       }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } }).response?.data?.error || 'Verification failed'
