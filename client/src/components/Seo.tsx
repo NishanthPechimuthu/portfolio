@@ -32,8 +32,20 @@ export function Seo({
   const fullTitle = title ? (title.includes(siteTitle) ? title : `${title} | ${siteTitle}`) : siteTitle;
   
   const defaultDesc = "I'm Nishanth, a creative developer building digital experiences.";
-  const metaDescription = description || settings?.site_description || defaultDesc;
-  const metaKeywords = keywords || settings?.seo_keywords || 'developer, portfolio, react, nodejs, fullstack';
+  
+  // Dynamically apply global SEO settings to all pages
+  const globalDesc = settings?.site_description || defaultDesc;
+  // If page has a specific description, combine it with the global SEO description for better ranking
+  const metaDescription = description && description !== globalDesc
+    ? `${description} | ${globalDesc}`
+    : globalDesc;
+
+  const globalKeywords = settings?.seo_keywords || 'developer, portfolio, react, nodejs, fullstack';
+  // Always include the global SEO keywords on every page
+  const metaKeywords = keywords && keywords !== globalKeywords
+    ? `${keywords}, ${globalKeywords}`
+    : globalKeywords;
+
   const metaImage = image || `${siteUrl}/default-og-image.jpg`;
   const metaUrl = url ? (url.startsWith('http') ? url : `${siteUrl}${url.startsWith('/') ? '' : '/'}${url}`) : siteUrl;
   const gaId = settings?.google_analytics_id;
