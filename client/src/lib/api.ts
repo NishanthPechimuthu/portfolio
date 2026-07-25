@@ -8,15 +8,14 @@ export const api = axios.create({
   withCredentials: true,
 })
 
+// Attach Bearer token to every request
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token
   if (token) {
-    if (config.headers && typeof config.headers.set === 'function') {
-      config.headers.set('Authorization', `Bearer ${token}`)
-    }
-    config.headers.Authorization = `Bearer ${token}`
+    config.headers['Authorization'] = `Bearer ${token}`
   }
-  
+
+  // Prepend /admin prefix to non-public, non-auth routes
   if (
     config.url &&
     !config.url.startsWith('http://') &&
@@ -25,19 +24,25 @@ api.interceptors.request.use((config) => {
     !config.url.startsWith('/auth') &&
     !config.url.startsWith('/admin')
   ) {
-    config.url = '/admin' + (config.url.startsWith('/') ? '' : '/') + config.url;
+    config.url = '/admin' + (config.url.startsWith('/') ? '' : '/') + config.url
   }
 
   return config
 })
 
-// Handle 401 — logout (ignoring login/auth calls)
+// On 401 from any admin route, force logout
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      const isAuthEndpoint = err.config?.url?.includes('/auth/')
-      if (!isAuthEndpoint) {
+      const url: string = err.config?.url || ''
+      // Only auto-logout for protected admin API calls, NOT login/verify routes
+      const isPublicAuthCall =
+        url.includes('/auth/login') ||
+        url.includes('/auth/verify-2fa') ||
+        url.includes('/auth/resend-2fa') ||
+        url.includes('/public/')
+      if (!isPublicAuthCall) {
         useAuthStore.getState().logout()
       }
     }
