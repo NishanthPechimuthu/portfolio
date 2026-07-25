@@ -2,7 +2,8 @@ import crypto from "crypto";
 
 /**
  * Verify a TOTP code using RFC 6238 HMAC-SHA1.
- * Accepts codes from -1/0/+1 time windows to handle clock drift.
+ * Uses (>>> 0) unsigned 32-bit integer conversion to fix JavaScript signed overflow bug.
+ * Accepts codes from -2 to +2 time steps (±60s) to handle server/mobile clock drift.
  */
 export function verifyTOTP(secret: string, token: string): boolean {
   try {
@@ -11,6 +12,7 @@ export function verifyTOTP(secret: string, token: string): boolean {
 
     const base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
     const cleanSecret = secret.toUpperCase().replace(/[=\s]/g, "");
+    if (!cleanSecret || cleanSecret.length < 8) return false;
 
     let bits = "";
     for (let j = 0; j < cleanSecret.length; j++) {
@@ -25,7 +27,8 @@ export function verifyTOTP(secret: string, token: string): boolean {
     const period = 30;
     const now = Math.floor(Date.now() / 1000);
 
-    for (let i = -1; i <= 1; i++) {
+    // Test time steps from -2 to +2 (±60 seconds window for clock skew)
+    for (let i = -2; i <= 2; i++) {
       const timeStep = Math.floor((now + i * period) / period);
       const buffer = Buffer.alloc(8);
       buffer.writeBigInt64BE(BigInt(timeStep), 0);
@@ -34,11 +37,14 @@ export function verifyTOTP(secret: string, token: string): boolean {
       hmac.update(buffer);
       const hmacResult = hmac.digest();
       const offset = hmacResult[hmacResult.length - 1] & 0xf;
+      
+      // >>> 0 converts JS bitwise signed 32-bit int to unsigned Uint32
       const code =
-        ((hmacResult[offset] & 0x7f) << 24) |
-        ((hmacResult[offset + 1] & 0xff) << 16) |
-        ((hmacResult[offset + 2] & 0xff) << 8) |
-        (hmacResult[offset + 3] & 0xff);
+        (((hmacResult[offset] & 0x7f) << 24) |
+         ((hmacResult[offset + 1] & 0xff) << 16) |
+         ((hmacResult[offset + 2] & 0xff) << 8) |
+         (hmacResult[offset + 3] & 0xff)) >>> 0;
+
       const otp = (code % 1000000).toString().padStart(6, "0");
       if (otp === cleanToken) return true;
     }

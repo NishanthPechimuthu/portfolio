@@ -38,15 +38,8 @@ export default function AdminLoginPage() {
       if (data.requires2FA) {
         setTempToken(data.tempToken || '')
         setDestinationEmail(data.destinationEmail || 'your email')
-        setHasTOTP(!!data.hasTOTP)
-        // If only email is available, skip method chooser and go straight to sending email
-        if (!data.hasTOTP) {
-          await sendEmailCode(data.tempToken)
-          setMethod('email')
-          setStep('verify')
-        } else {
-          setStep('choose-method')
-        }
+        setHasTOTP(data.hasTOTP !== false)
+        setStep('choose-method')
       } else if (data.success && data.token && data.username) {
         login(data.token, data.username)
         toast.success(`Welcome back, ${data.username}!`)
@@ -240,22 +233,20 @@ export default function AdminLoginPage() {
                 </button>
 
                 {/* Authenticator App (TOTP) */}
-                {hasTOTP && (
-                  <button
-                    type="button"
-                    onClick={() => handleChooseMethod('totp')}
-                    className="w-full flex items-center gap-4 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-brand/50 rounded-2xl px-5 py-4 transition-all group"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand shrink-0 group-hover:bg-brand/20 transition-colors">
-                      <Smartphone className="w-5 h-5" />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-white text-sm font-semibold">Authenticator App</p>
-                      <p className="text-zinc-500 text-xs mt-0.5">Use Google Authenticator or Authy</p>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-brand ml-auto transition-colors" />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => handleChooseMethod('totp')}
+                  className="w-full flex items-center gap-4 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-brand/50 rounded-2xl px-5 py-4 transition-all group"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand shrink-0 group-hover:bg-brand/20 transition-colors">
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-white text-sm font-semibold">Authenticator App</p>
+                    <p className="text-zinc-500 text-xs mt-0.5">Use Google Authenticator or Authy</p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-brand ml-auto transition-colors" />
+                </button>
               </div>
 
               <button
