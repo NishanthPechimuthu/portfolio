@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m as motion, AnimatePresence, LazyMotion, domAnimation } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import { Moon, Sun, Menu, X, ArrowRight } from 'lucide-react'
 import api from '@/lib/api'
@@ -67,106 +67,108 @@ export default function RootLayout() {
   }, [homeData])
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <GlobalLoader isLoading={isHomeLoading} />
-      {/* ── NAV ─────────────────────────────────────────────────── */}
-      <header
-        className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
-          scrolled ? 'bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md shadow-sm shadow-black/5' : ''
-        }`}
-      >
-        <nav className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link to="/" className="font-bold text-xl tracking-tight flex items-center gap-2">
-            <img src="/logo/png/NP-64-BT.png" alt="NP" className="h-8 w-auto object-contain dark:hidden" />
-            <img src="/logo/png/NP-64-WT.png" alt="NP" className="h-8 w-auto object-contain hidden dark:block" />
-          </Link>
+    <LazyMotion features={domAnimation}>
+      <div className="min-h-screen bg-background text-foreground">
+        <GlobalLoader isLoading={isHomeLoading} />
+        {/* ── NAV ─────────────────────────────────────────────────── */}
+        <header
+          className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+            scrolled ? 'bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md shadow-sm shadow-black/5' : ''
+          }`}
+        >
+          <nav className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+            <Link to="/" className="font-bold text-xl tracking-tight flex items-center gap-2">
+              <img src="/logo/png/NP-64-BT.png" alt="NP" className="h-8 w-auto object-contain dark:hidden" />
+              <img src="/logo/png/NP-64-WT.png" alt="NP" className="h-8 w-auto object-contain hidden dark:block" />
+            </Link>
 
-          {/* Desktop nav */}
-          <ul className="hidden md:flex items-center gap-8 text-sm">
-            {navItems.map((item: { id: number; label: string; url: string }) => (
-              <li key={item.id}>
-                <a
-                  href={item.url.startsWith('#') && location.pathname !== '/' ? `/${item.url}` : item.url}
-                  className="text-muted-foreground hover:text-foreground transition-colors relative group"
-                >
-                  {item.label}
-                  <span className="absolute -bottom-0.5 left-0 w-0 h-px bg-brand group-hover:w-full transition-all duration-200" />
-                </a>
-              </li>
-            ))}
-          </ul>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setDark(!dark)}
-              className="w-9 h-9 flex items-center justify-center rounded-full border border-border hover:bg-muted transition-colors"
-              aria-label={dark ? 'Light mode' : 'Dark mode'}
-            >
-              {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
-
-            <a
-              href={location.pathname === '/' ? '#contact' : '/#contact'}
-              className="hidden md:inline-flex items-center gap-2 shimmer bg-brand text-white text-sm font-medium px-5 py-2 rounded-full hover:bg-brand-light transition-colors"
-            >
-              Hire me <ArrowRight className="w-3.5 h-3.5" />
-            </a>
-
-            <button
-              onClick={() => setMobileOpen(!mobileOpen)}
-              className="md:hidden w-9 h-9 flex items-center justify-center rounded-full border border-border"
-              aria-label="Toggle menu"
-            >
-              {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-            </button>
-          </div>
-        </nav>
-
-        {/* Mobile menu */}
-        <AnimatePresence>
-          {mobileOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className="md:hidden bg-background border-t border-border"
-            >
-              <ul className="flex flex-col px-6 py-5 gap-4 text-sm">
-                {navItems.map((item: { id: number; label: string; url: string }) => (
-                  <li key={item.id}>
-                    <a href={item.url} className="block text-muted-foreground hover:text-foreground transition-colors">
-                      {item.label}
-                    </a>
-                  </li>
-                ))}
-                <li className="pt-2 border-t border-border">
-                  <a href="#contact" className="inline-flex shimmer bg-brand text-white font-medium text-sm px-5 py-2.5 rounded-full">
-                    Hire me →
+            {/* Desktop nav */}
+            <ul className="hidden md:flex items-center gap-8 text-sm">
+              {navItems.map((item: { id: number; label: string; url: string }) => (
+                <li key={item.id}>
+                  <a
+                    href={item.url.startsWith('#') && location.pathname !== '/' ? `/${item.url}` : item.url}
+                    className="text-muted-foreground hover:text-foreground transition-colors relative group"
+                  >
+                    {item.label}
+                    <span className="absolute -bottom-0.5 left-0 w-0 h-px bg-brand group-hover:w-full transition-all duration-200" />
                   </a>
                 </li>
-              </ul>
+              ))}
+            </ul>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setDark(!dark)}
+                className="w-9 h-9 flex items-center justify-center rounded-full border border-border hover:bg-muted transition-colors"
+                aria-label={dark ? 'Light mode' : 'Dark mode'}
+              >
+                {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+
+              <a
+                href={location.pathname === '/' ? '#contact' : '/#contact'}
+                className="hidden md:inline-flex items-center gap-2 shimmer bg-brand text-white text-sm font-medium px-5 py-2 rounded-full hover:bg-brand-light transition-colors"
+              >
+                Hire me <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+
+              <button
+                onClick={() => setMobileOpen(!mobileOpen)}
+                className="md:hidden w-9 h-9 flex items-center justify-center rounded-full border border-border"
+                aria-label="Toggle menu"
+              >
+                {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              </button>
+            </div>
+          </nav>
+
+          {/* Mobile menu */}
+          <AnimatePresence>
+            {mobileOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="md:hidden bg-background border-t border-border"
+              >
+                <ul className="flex flex-col px-6 py-5 gap-4 text-sm">
+                  {navItems.map((item: { id: number; label: string; url: string }) => (
+                    <li key={item.id}>
+                      <a href={item.url} className="block text-muted-foreground hover:text-foreground transition-colors">
+                        {item.label}
+                      </a>
+                    </li>
+                  ))}
+                  <li className="pt-2 border-t border-border">
+                    <a href="#contact" className="inline-flex shimmer bg-brand text-white font-medium text-sm px-5 py-2.5 rounded-full">
+                      Hire me →
+                    </a>
+                  </li>
+                </ul>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </header>
+
+        <main>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Outlet />
             </motion.div>
-          )}
-        </AnimatePresence>
-      </header>
+          </AnimatePresence>
+        </main>
 
-      <main>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
-          >
-            <Outlet />
-          </motion.div>
-        </AnimatePresence>
-      </main>
-
-      {/* ── FOOTER ──────────────────────────────────────────────── */}
-      <Footer />
-    </div>
+        {/* ── FOOTER ──────────────────────────────────────────────── */}
+        <Footer />
+      </div>
+    </LazyMotion>
   )
 }
 

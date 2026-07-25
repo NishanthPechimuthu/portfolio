@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
+import {m as motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { Briefcase, BookOpen, Mail, Award, Zap, ArrowRight, Activity } from 'lucide-react'
 import api from '@/lib/api'

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
+import {m as motion } from 'framer-motion'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ExternalLink, Github } from 'lucide-react'
 import api from '@/lib/api'

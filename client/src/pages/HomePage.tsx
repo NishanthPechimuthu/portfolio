@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
+import {m as motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -347,6 +347,7 @@ export default function HomePage() {
                     alt="Nishanth — Full Stack Developer"
                     className="w-full h-full object-cover"
                     loading="eager"
+                    fetchPriority="high"
                   />
                 </div>
                 <motion.div
@@ -543,7 +544,7 @@ export default function HomePage() {
                   }`}>
                     <div className="flex gap-4 items-start mb-5">
                       <div className="w-12 h-12 rounded-full bg-[#ccc] flex items-center justify-center text-black font-bold text-xs shrink-0 overflow-hidden">
-                        {exp.logo ? <img src={exp.logo as string} alt="" className="w-full h-full object-cover" /> : 'LOGO'}
+                        {exp.logo ? <img src={exp.logo as string} alt="" className="w-full h-full object-cover" loading="lazy" /> : 'LOGO'}
                       </div>
                       <div>
                         <h4 className="font-bold text-xl md:text-2xl leading-tight">{exp.title as string}</h4>
@@ -584,7 +585,7 @@ export default function HomePage() {
                   }`}>
                     <div className="flex gap-4 items-start mb-5">
                       <div className="w-12 h-12 rounded-full bg-[#ccc] flex items-center justify-center text-black font-bold text-xs shrink-0 overflow-hidden">
-                        {edu.logo ? <img src={edu.logo as string} alt="" className="w-full h-full object-cover" /> : 'LOGO'}
+                        {edu.logo ? <img src={edu.logo as string} alt="" className="w-full h-full object-cover" loading="lazy" /> : 'LOGO'}
                       </div>
                       <div>
                         <h4 className="font-bold text-xl md:text-2xl leading-tight">{edu.title as string}</h4>
@@ -642,7 +643,7 @@ export default function HomePage() {
                 <div className="flex gap-4 items-start mb-8">
                   <div className="w-14 h-14 rounded-full bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/50 flex items-center justify-center text-zinc-500 font-bold text-xs shrink-0 overflow-hidden">
                     {cert.logo ? (
-                      <img src={cert.logo as string} alt="" className="w-full h-full object-cover" />
+                      <img src={cert.logo as string} alt="" className="w-full h-full object-cover" loading="lazy" />
                     ) : (
                       'LOGO'
                     )}
@@ -725,6 +726,7 @@ export default function HomePage() {
                     alt={post.title as string}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     loading="lazy"
+                    decoding="async"
                   />
                 </div>
                 <div className="p-6">

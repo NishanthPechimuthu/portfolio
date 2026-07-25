@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import {m as motion } from 'framer-motion'
 import { Download, File, Lock, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import api from '@/lib/api'

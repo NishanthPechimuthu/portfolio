@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
+import {m as motion } from 'framer-motion'
 import { Award, ExternalLink } from 'lucide-react'
 import api from '@/lib/api'
 import { useState } from 'react'

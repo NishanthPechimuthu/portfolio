@@ -4,7 +4,7 @@ import { Image as ImageIcon, Trash2, Upload, Copy, Check, Edit2 } from 'lucide-r
 import { toast } from 'sonner'
 import api from '@/lib/api'
 import { formatBytes, formatDate } from '@/lib/utils'
-import { motion } from 'framer-motion'
+import {m as motion } from 'framer-motion'
 
 export default function MediaPage() {
   const queryClient = useQueryClient()

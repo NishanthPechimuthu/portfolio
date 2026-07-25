@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useParams, Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import {m as motion } from 'framer-motion'
 import { ArrowLeft, ExternalLink, Github, Calendar, User, Briefcase, CheckCircle } from 'lucide-react'
 import { Seo } from '@/components/Seo'
 import api from '@/lib/api'

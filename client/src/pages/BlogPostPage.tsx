@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import {m as motion } from 'framer-motion'
 import { ArrowLeft, Calendar, Clock, Eye, Share2 } from 'lucide-react'
 import { toast } from 'sonner'
 import api from '@/lib/api'

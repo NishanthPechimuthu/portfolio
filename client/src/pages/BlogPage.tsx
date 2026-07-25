@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import {m as motion } from 'framer-motion'
 import { Eye, Calendar, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 import api from '@/lib/api'
 import { formatDate, formatViews } from '@/lib/utils'
