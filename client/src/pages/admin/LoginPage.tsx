@@ -4,7 +4,7 @@ import { useAuthStore } from '@/store/authStore'
 import { toast } from 'sonner'
 import api from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShieldCheck, KeyRound, ArrowRight, RefreshCw, Mail, Smartphone } from 'lucide-react'
+import { KeyRound, ArrowRight, RefreshCw, Mail, Smartphone } from 'lucide-react'
 
 type Step = 'credentials' | 'verify'
 type Method = 'totp' | 'email'
