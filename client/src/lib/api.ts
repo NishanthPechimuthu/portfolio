@@ -41,6 +41,7 @@ api.interceptors.response.use(
         url.includes('/auth/login') ||
         url.includes('/auth/verify-2fa') ||
         url.includes('/auth/resend-2fa') ||
+        url.includes('/auth/send-email-otp') ||
         url.includes('/public/')
       if (!isPublicAuthCall) {
         useAuthStore.getState().logout()

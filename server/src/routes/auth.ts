@@ -7,6 +7,7 @@ import { z } from "zod";
 import { prisma } from "../utils/prisma";
 import { authenticate, AuthRequest } from "../middleware/auth";
 import { sendEmail } from "../utils/email";
+import { verifyTOTP } from "../utils/totp";
 
 const router = Router();
 
@@ -40,49 +41,7 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
-// Helper: Verify TOTP code using RFC 6238 HMAC-SHA1
-export function verifyTOTP(secret: string, token: string): boolean {
-  try {
-    const period = 30;
-    const now = Math.floor(Date.now() / 1000);
-    const cleanToken = token.trim().replace(/\s/g, "");
-    if (cleanToken.length !== 6 || !/^\d{6}$/.test(cleanToken)) return false;
 
-    const base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-    const cleanSecret = secret.toUpperCase().replace(/=/g, "").replace(/\s/g, "");
-
-    let bits = "";
-    for (let j = 0; j < cleanSecret.length; j++) {
-      const val = base32chars.indexOf(cleanSecret.charAt(j));
-      if (val >= 0) bits += val.toString(2).padStart(5, "0");
-    }
-    const bytes = new Uint8Array(Math.floor(bits.length / 8));
-    for (let j = 0; j < bytes.length; j++) {
-      bytes[j] = parseInt(bits.substring(j * 8, j * 8 + 8), 2);
-    }
-
-    // Check current and adjacent time windows (±1 step for clock drift)
-    for (let i = -1; i <= 1; i++) {
-      const timeStep = Math.floor((now + i * period) / period);
-      const buffer = Buffer.alloc(8);
-      buffer.writeBigInt64BE(BigInt(timeStep), 0);
-
-      const hmac = crypto.createHmac("sha1", Buffer.from(bytes));
-      hmac.update(buffer);
-      const hmacResult = hmac.digest();
-      const offset = hmacResult[hmacResult.length - 1] & 0xf;
-      const code = ((hmacResult[offset] & 0x7f) << 24) |
-                   ((hmacResult[offset + 1] & 0xff) << 16) |
-                   ((hmacResult[offset + 2] & 0xff) << 8) |
-                   (hmacResult[offset + 3] & 0xff);
-      const otp = (code % 1000000).toString().padStart(6, "0");
-      if (otp === cleanToken) return true;
-    }
-  } catch (e) {
-    console.error("TOTP verification error:", e);
-  }
-  return false;
-}
 
 // Helper: Sign a JWT for a user
 function signJWT(userId: number, username: string): string {
@@ -158,49 +117,31 @@ router.post("/login", authLimiter, async (req: Request, res: Response) => {
     const is2FAEnabled = process.env.ENABLE_2FA === "true";
 
     if (is2FAEnabled) {
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const tempToken = crypto.randomBytes(32).toString("hex");
-
-      pendingOTPs.set(tempToken, {
-        userId: user.id,
-        username: user.username,
-        code: otp,
-        expiresAt: Date.now() + 10 * 60 * 1000, // 10 min
-      });
+      // Check if TOTP is configured (authenticator app available)
+      let totpSecret = process.env.TOTP_SECRET || null;
+      if (!totpSecret) {
+        const setting = await prisma.siteSetting.findUnique({ where: { settingKey: "totp_secret" } });
+        totpSecret = setting?.settingValue || null;
+      }
+      const hasTOTP = !!totpSecret;
 
       const adminEmail = process.env.ADMIN_EMAIL || "admin@nishanth.qzz.io";
       const maskedEmail = adminEmail.replace(/^(.{2})([^@]*)(@.+)$/, (_, a, b, c) => a + "*".repeat(b.length) + c);
 
-      try {
-        await sendEmail({
-          to: adminEmail,
-          subject: "🔐 Admin Login — Verification Code",
-          html: `
-            <div style="font-family:'Segoe UI',sans-serif;background:#09090b;padding:32px;color:#fff;border-radius:16px;max-width:480px;margin:0 auto;border:1px solid #27272a;">
-              <div style="text-align:center;margin-bottom:24px;">
-                <h2 style="color:#FF6B2B;margin:0;font-size:24px;font-weight:700;">NP Admin CMS</h2>
-                <p style="color:#71717a;font-size:13px;margin-top:4px;">2-Step Verification Code</p>
-              </div>
-              <p style="color:#a1a1aa;font-size:14px;line-height:1.5;margin-bottom:20px;">
-                Login attempt for <strong>${user.username}</strong>. Your code:
-              </p>
-              <div style="background:#18181b;border:1px solid #FF6B2B;font-size:36px;font-weight:800;letter-spacing:10px;color:#FF6B2B;padding:20px;text-align:center;border-radius:12px;margin:24px 0;">
-                ${otp}
-              </div>
-              <p style="color:#71717a;font-size:12px;">Expires in <strong>10 minutes</strong>. If you did not request this, please ignore.</p>
-            </div>
-          `,
-        });
-      } catch (emailErr: any) {
-        console.warn("2FA email failed:", emailErr.message);
-        console.info(`[2FA BACKUP] Token: ${tempToken} | OTP: ${otp}`);
-      }
+      // Create a tempToken that will be used for whichever method is chosen
+      const tempToken = crypto.randomBytes(32).toString("hex");
+      pendingOTPs.set(tempToken, {
+        userId: user.id,
+        username: user.username,
+        code: "", // email OTP code set when user requests email
+        expiresAt: Date.now() + 15 * 60 * 1000, // 15 min for method selection
+      });
 
       res.json({
         requires2FA: true,
         tempToken,
+        hasTOTP,
         destinationEmail: maskedEmail,
-        message: `Verification code sent to ${maskedEmail}`,
       });
       return;
     }
@@ -215,6 +156,56 @@ router.post("/login", authLimiter, async (req: Request, res: Response) => {
       return;
     }
     res.status(500).json({ error: "Login failed. Please try again." });
+  }
+});
+
+// POST /api/auth/send-email-otp — user chose email method, generate & send OTP
+router.post("/send-email-otp", authLimiter, async (req: Request, res: Response) => {
+  try {
+    const { tempToken } = z.object({ tempToken: z.string().min(1) }).parse(req.body);
+
+    const pending = pendingOTPs.get(tempToken);
+    if (!pending || Date.now() > pending.expiresAt) {
+      res.status(400).json({ error: "Session expired. Please sign in again." });
+      return;
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    pending.code = otp;
+    pending.expiresAt = Date.now() + 10 * 60 * 1000; // 10 min from now
+    pendingOTPs.set(tempToken, pending);
+
+    const adminEmail = process.env.ADMIN_EMAIL || "admin@nishanth.qzz.io";
+    const maskedEmail = adminEmail.replace(/^(.{2})([^@]*)(@.+)$/, (_, a, b, c) => a + "*".repeat(b.length) + c);
+
+    try {
+      await sendEmail({
+        to: adminEmail,
+        subject: "🔐 Admin Login — Verification Code",
+        html: `
+          <div style="font-family:'Segoe UI',sans-serif;background:#09090b;padding:32px;color:#fff;border-radius:16px;max-width:480px;margin:0 auto;border:1px solid #27272a;">
+            <div style="text-align:center;margin-bottom:24px;">
+              <h2 style="color:#FF6B2B;margin:0;font-size:24px;font-weight:700;">NP Admin CMS</h2>
+              <p style="color:#71717a;font-size:13px;margin-top:4px;">Email Verification Code</p>
+            </div>
+            <p style="color:#a1a1aa;font-size:14px;line-height:1.5;margin-bottom:20px;">
+              Login attempt for <strong>${pending.username}</strong>. Your code:
+            </p>
+            <div style="background:#18181b;border:1px solid #FF6B2B;font-size:36px;font-weight:800;letter-spacing:10px;color:#FF6B2B;padding:20px;text-align:center;border-radius:12px;margin:24px 0;">
+              ${otp}
+            </div>
+            <p style="color:#71717a;font-size:12px;">Expires in <strong>10 minutes</strong>. If you did not request this, please ignore.</p>
+          </div>
+        `,
+      });
+    } catch (emailErr: any) {
+      console.warn("Email OTP send failed:", emailErr.message);
+      console.info(`[2FA BACKUP] Token: ${tempToken} | OTP: ${otp}`);
+    }
+
+    res.json({ success: true, destinationEmail: maskedEmail, message: `Code sent to ${maskedEmail}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Failed to send verification code" });
   }
 });
 

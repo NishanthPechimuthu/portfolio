@@ -9,7 +9,7 @@ import { uploadImage, uploadFile, getFileUrl } from "../middleware/upload";
 import { slugify, generateShareKey, paginate } from "../utils/helpers";
 import { sendEmail } from "../utils/email";
 import axios from "axios";
-import { verifyTOTP } from "./auth";
+import { verifyTOTP } from "../utils/totp";
 
 const router = Router();
 router.use(authenticate);
