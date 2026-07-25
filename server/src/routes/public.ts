@@ -260,6 +260,17 @@ router.get("/nav", async (_req: Request, res: Response) => {
   }
 });
 
+// GET /api/public/settings
+router.get("/settings", async (_req: Request, res: Response) => {
+  try {
+    const settings = await prisma.siteSetting.findMany();
+    const settingsMap = Object.fromEntries(settings.map((s) => [s.settingKey, s.settingValue]));
+    res.json(settingsMap);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch public settings" });
+  }
+});
+
 // GET /api/public/resume/download
 router.get("/resume/download", async (req: Request, res: Response) => {
   try {

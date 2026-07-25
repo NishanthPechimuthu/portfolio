@@ -67,8 +67,9 @@ export default function BlogPostPage() {
   return (
     <div className="pt-24 pb-24 px-6 max-w-3xl mx-auto min-h-screen">
       <Seo 
-        title={`${post.title} - Blog`} 
+        title={post.metaTitle || `${post.title} - Blog`} 
         description={post.metaDescription || post.excerpt}
+        keywords={post.metaKeywords}
         image={post.featuredImage}
         url={`/blog/${slug}`}
         type="article"

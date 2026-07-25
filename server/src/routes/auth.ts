@@ -212,8 +212,14 @@ router.post("/verify-2fa", authLimiter, async (req: Request, res: Response) => {
     const pending = pendingOTPs.get(tempToken);
     let isValid = false;
 
-    // 1. Verify TOTP if secret configured in env
-    if (process.env.TOTP_SECRET && verifyTOTP(process.env.TOTP_SECRET, code)) {
+    // 1. Verify TOTP if secret configured in env or site_settings
+    let totpSecret = process.env.TOTP_SECRET;
+    if (!totpSecret) {
+      const setting = await prisma.siteSetting.findUnique({ where: { settingKey: "totp_secret" } });
+      totpSecret = setting?.settingValue || undefined;
+    }
+
+    if (totpSecret && verifyTOTP(totpSecret, code)) {
       isValid = true;
     }
 
