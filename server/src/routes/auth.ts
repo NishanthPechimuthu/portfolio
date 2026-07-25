@@ -14,11 +14,12 @@ const authLimiter = rateLimit({
   windowMs: 900000,
   max: Number(process.env.AUTH_RATE_LIMIT_MAX) || 10,
   message: { error: "Too many login attempts, please try again in 15 minutes." },
+  skipSuccessfulRequests: true,
 });
 
 const loginSchema = z.object({
-  username: z.string().min(1),
-  password: z.string().min(1),
+  username: z.string().min(1).max(100),
+  password: z.string().min(1).max(200),
 });
 
 // In-memory store for pending 2FA OTP tokens
@@ -31,28 +32,40 @@ interface PendingOTP {
 
 const pendingOTPs = new Map<string, PendingOTP>();
 
-// Helper function to verify TOTP code using RFC 6238 HMAC-SHA1
+// Cleanup expired OTPs periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of pendingOTPs.entries()) {
+    if (now > val.expiresAt) pendingOTPs.delete(key);
+  }
+}, 60 * 1000);
+
+// Helper: Verify TOTP code using RFC 6238 HMAC-SHA1
 export function verifyTOTP(secret: string, token: string): boolean {
   try {
     const period = 30;
     const now = Math.floor(Date.now() / 1000);
-    const cleanToken = token.trim();
+    const cleanToken = token.trim().replace(/\s/g, "");
+    if (cleanToken.length !== 6 || !/^\d{6}$/.test(cleanToken)) return false;
+
+    const base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    const cleanSecret = secret.toUpperCase().replace(/=/g, "").replace(/\s/g, "");
+
+    let bits = "";
+    for (let j = 0; j < cleanSecret.length; j++) {
+      const val = base32chars.indexOf(cleanSecret.charAt(j));
+      if (val >= 0) bits += val.toString(2).padStart(5, "0");
+    }
+    const bytes = new Uint8Array(Math.floor(bits.length / 8));
+    for (let j = 0; j < bytes.length; j++) {
+      bytes[j] = parseInt(bits.substring(j * 8, j * 8 + 8), 2);
+    }
+
+    // Check current and adjacent time windows (±1 step for clock drift)
     for (let i = -1; i <= 1; i++) {
       const timeStep = Math.floor((now + i * period) / period);
       const buffer = Buffer.alloc(8);
       buffer.writeBigInt64BE(BigInt(timeStep), 0);
-
-      const base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-      let bits = "";
-      const cleanSecret = secret.toUpperCase().replace(/=/g, "").replace(/ /g, "");
-      for (let j = 0; j < cleanSecret.length; j++) {
-        const val = base32chars.indexOf(cleanSecret.charAt(j));
-        if (val >= 0) bits += val.toString(2).padStart(5, "0");
-      }
-      const bytes = new Uint8Array(Math.floor(bits.length / 8));
-      for (let j = 0; j < bytes.length; j++) {
-        bytes[j] = parseInt(bits.substring(j * 8, j * 8 + 8), 2);
-      }
 
       const hmac = crypto.createHmac("sha1", Buffer.from(bytes));
       hmac.update(buffer);
@@ -71,61 +84,77 @@ export function verifyTOTP(secret: string, token: string): boolean {
   return false;
 }
 
+// Helper: Sign a JWT for a user
+function signJWT(userId: number, username: string): string {
+  return jwt.sign(
+    { id: userId, username },
+    process.env.JWT_SECRET!,
+    { expiresIn: (process.env.JWT_EXPIRES_IN || "7d") as any }
+  );
+}
+
 // POST /api/auth/login
 router.post("/login", authLimiter, async (req: Request, res: Response) => {
   try {
     const { username, password } = loginSchema.parse(req.body);
 
-    const cleanUsername = username.trim();
-    const envUsername = (process.env.ADMIN_USERNAME || "admin").trim();
-    const envEmail = (process.env.ADMIN_EMAIL || "").trim();
+    const cleanUsername = username.trim().toLowerCase();
+    const envUsername = (process.env.ADMIN_USERNAME || "admin").trim().toLowerCase();
+    const envEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
     const envPassword = process.env.ADMIN_PASSWORD;
 
-    const usernamePrefix = cleanUsername.includes("@") ? cleanUsername.split("@")[0] : cleanUsername;
-    const isEnvMatch =
+    // Check if the submitted username matches the env-configured admin
+    const isEnvUsernameMatch =
       cleanUsername === envUsername ||
       cleanUsername === envEmail ||
-      (envEmail.length > 0 && cleanUsername === envEmail.split("@")[0]) ||
-      usernamePrefix === envUsername ||
-      (envEmail.length > 0 && usernamePrefix === envEmail.split("@")[0]);
+      (envEmail.length > 0 && cleanUsername === envEmail.split("@")[0]);
 
-    // Search DB by exact username or prefix before @
+    // Search DB: find user matching submitted username (case-insensitive)
     let user = await prisma.adminUser.findFirst({
       where: {
         OR: [
-          { username: cleanUsername },
-          { username: usernamePrefix },
+          { username: { equals: username.trim(), mode: "insensitive" } },
+          { username: { equals: cleanUsername, mode: "insensitive" } },
         ],
       },
     });
 
     let isPasswordValid = false;
+
     if (user) {
+      // Primary check: bcrypt compare against stored hash
       isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     }
 
-    // Fallback: Check against .env ADMIN_PASSWORD if username matches env AND (password matches or DB user missing)
-    if (!isPasswordValid && envPassword && password === envPassword && isEnvMatch) {
+    // Fallback: Allow login via .env credentials if username matches env admin
+    // This is a bootstrap mechanism — once logged in, password is synced to DB
+    if (!isPasswordValid && envPassword && isEnvUsernameMatch && password === envPassword) {
       isPasswordValid = true;
       const newHash = await bcrypt.hash(envPassword, 10);
       if (user) {
+        // Update existing user's password hash
         user = await prisma.adminUser.update({
           where: { id: user.id },
-          data: { passwordHash: newHash, username: envUsername || user.username },
+          data: { passwordHash: newHash },
         });
       } else {
+        // Create admin user for first-time setup
         user = await prisma.adminUser.create({
-          data: { username: envUsername || "np", passwordHash: newHash },
+          data: {
+            username: process.env.ADMIN_USERNAME || "np",
+            passwordHash: newHash,
+          },
         });
       }
     }
 
+    // Hard reject: wrong credentials
     if (!user || !isPasswordValid) {
       res.status(401).json({ error: "Invalid username or password" });
       return;
     }
 
-    // Check if 2FA is required (only enabled if ENABLE_2FA=true in .env)
+    // 2FA check
     const is2FAEnabled = process.env.ENABLE_2FA === "true";
 
     if (is2FAEnabled) {
@@ -136,63 +165,56 @@ router.post("/login", authLimiter, async (req: Request, res: Response) => {
         userId: user.id,
         username: user.username,
         code: otp,
-        expiresAt: Date.now() + 10 * 60 * 1000, // 10 mins
+        expiresAt: Date.now() + 10 * 60 * 1000, // 10 min
       });
 
-      const adminEmail = process.env.ADMIN_EMAIL || process.env.REPLY_EMAIL || "admin@nishanth.qzz.io";
-      const maskedEmail = adminEmail.replace(/(.{2})(.*)(?=@)/, (_m, p1, p2) => p1 + "*".repeat(p2.length));
+      const adminEmail = process.env.ADMIN_EMAIL || "admin@nishanth.qzz.io";
+      const maskedEmail = adminEmail.replace(/^(.{2})([^@]*)(@.+)$/, (_, a, b, c) => a + "*".repeat(b.length) + c);
 
       try {
         await sendEmail({
           to: adminEmail,
-          subject: "🔐 Admin Login — 2-Step Verification Code",
+          subject: "🔐 Admin Login — Verification Code",
           html: `
-            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #09090b; padding: 32px; color: #ffffff; border-radius: 16px; max-width: 480px; margin: 0 auto; border: 1px solid #27272a;">
-              <div style="text-align: center; margin-bottom: 24px;">
-                <h2 style="color: #FF6B2B; margin: 0; font-size: 24px; font-weight: 700;">NP Admin CMS</h2>
-                <p style="color: #71717a; font-size: 13px; margin-top: 4px;">2-Step Verification Code</p>
+            <div style="font-family:'Segoe UI',sans-serif;background:#09090b;padding:32px;color:#fff;border-radius:16px;max-width:480px;margin:0 auto;border:1px solid #27272a;">
+              <div style="text-align:center;margin-bottom:24px;">
+                <h2 style="color:#FF6B2B;margin:0;font-size:24px;font-weight:700;">NP Admin CMS</h2>
+                <p style="color:#71717a;font-size:13px;margin-top:4px;">2-Step Verification Code</p>
               </div>
-              <p style="color: #a1a1aa; font-size: 14px; line-height: 1.5; margin-bottom: 20px;">
-                A login attempt was made for account <strong>${user.username}</strong>. Use the verification code below to complete your sign in:
+              <p style="color:#a1a1aa;font-size:14px;line-height:1.5;margin-bottom:20px;">
+                Login attempt for <strong>${user.username}</strong>. Your code:
               </p>
-              <div style="background: #18181b; border: 1px solid #FF6B2B; font-size: 36px; font-weight: 800; letter-spacing: 10px; color: #FF6B2B; padding: 20px; text-align: center; border-radius: 12px; margin: 24px 0;">
+              <div style="background:#18181b;border:1px solid #FF6B2B;font-size:36px;font-weight:800;letter-spacing:10px;color:#FF6B2B;padding:20px;text-align:center;border-radius:12px;margin:24px 0;">
                 ${otp}
               </div>
-              <p style="color: #71717a; font-size: 12px; line-height: 1.5;">
-                This code will expire in <strong>10 minutes</strong>. If you did not request this code, please ignore this email or update your admin password.
-              </p>
+              <p style="color:#71717a;font-size:12px;">Expires in <strong>10 minutes</strong>. If you did not request this, please ignore.</p>
             </div>
           `,
         });
       } catch (emailErr: any) {
-        console.warn("2FA email notification failed:", emailErr.message);
-        console.info(`[2FA OTP Backup] Temp Token: ${tempToken} | Code: ${otp}`);
+        console.warn("2FA email failed:", emailErr.message);
+        console.info(`[2FA BACKUP] Token: ${tempToken} | OTP: ${otp}`);
       }
 
       res.json({
         requires2FA: true,
         tempToken,
         destinationEmail: maskedEmail,
-        message: "Verification code sent to " + maskedEmail,
+        message: `Verification code sent to ${maskedEmail}`,
       });
       return;
     }
 
-    // If 2FA disabled, direct login
-    const token = jwt.sign(
-      { id: user.id, username: user.username },
-      process.env.JWT_SECRET!,
-      { expiresIn: (process.env.JWT_EXPIRES_IN || "7d") as any }
-    );
-
+    // 2FA disabled — issue JWT directly
+    const token = signJWT(user.id, user.username);
     res.json({ success: true, token, username: user.username });
   } catch (err: any) {
-    console.error("Login route error:", err);
+    console.error("Login error:", err);
     if (err instanceof z.ZodError) {
       res.status(400).json({ error: "Username and password are required" });
       return;
     }
-    res.status(500).json({ error: err?.message || "Login failed" });
+    res.status(500).json({ error: "Login failed. Please try again." });
   }
 });
 
@@ -201,26 +223,39 @@ router.post("/verify-2fa", authLimiter, async (req: Request, res: Response) => {
   try {
     const { tempToken, code } = z.object({
       tempToken: z.string().min(1),
-      code: z.string().min(1),
+      code: z.string().min(6).max(6),
     }).parse(req.body);
 
     const pending = pendingOTPs.get(tempToken);
     let isValid = false;
+    let resolvedUserId: number | null = null;
 
-    // 1. Verify TOTP if secret configured in env or site_settings
-    let totpSecret = process.env.TOTP_SECRET;
-    if (!totpSecret) {
-      const setting = await prisma.siteSetting.findUnique({ where: { settingKey: "totp_secret" } });
-      totpSecret = setting?.settingValue || undefined;
+    // 1. Try Email OTP verification first (requires valid tempToken)
+    if (pending) {
+      if (Date.now() > pending.expiresAt) {
+        pendingOTPs.delete(tempToken);
+        res.status(400).json({ error: "Verification code has expired. Please sign in again." });
+        return;
+      }
+      if (pending.code === code.trim()) {
+        isValid = true;
+        resolvedUserId = pending.userId;
+      }
     }
 
-    if (totpSecret && verifyTOTP(totpSecret, code)) {
-      isValid = true;
-    }
+    // 2. Try TOTP verification (Authenticator App) — works even if Email OTP pending exists
+    if (!isValid) {
+      let totpSecret = process.env.TOTP_SECRET || null;
+      if (!totpSecret) {
+        const setting = await prisma.siteSetting.findUnique({ where: { settingKey: "totp_secret" } });
+        totpSecret = setting?.settingValue || null;
+      }
 
-    // 2. Verify Email OTP
-    if (pending && pending.code === code.trim() && Date.now() < pending.expiresAt) {
-      isValid = true;
+      if (totpSecret && verifyTOTP(totpSecret, code)) {
+        isValid = true;
+        // For TOTP: resolve user from pending OTP or fall back to first admin
+        resolvedUserId = pending?.userId ?? null;
+      }
     }
 
     if (!isValid) {
@@ -228,32 +263,33 @@ router.post("/verify-2fa", authLimiter, async (req: Request, res: Response) => {
       return;
     }
 
-    let userId = pending?.userId;
-    let user = userId ? await prisma.adminUser.findUnique({ where: { id: userId } }) : null;
+    // Clean up used OTP
+    pendingOTPs.delete(tempToken);
+
+    // Resolve the user account
+    let user = resolvedUserId
+      ? await prisma.adminUser.findUnique({ where: { id: resolvedUserId } })
+      : null;
+
     if (!user) {
+      // Last resort: find the first admin
       user = await prisma.adminUser.findFirst();
     }
 
     if (!user) {
-      res.status(404).json({ error: "User account not found" });
+      res.status(500).json({ error: "Admin user account not found" });
       return;
     }
 
-    if (tempToken) pendingOTPs.delete(tempToken);
-
-    const token = jwt.sign(
-      { id: user.id, username: user.username },
-      process.env.JWT_SECRET!,
-      { expiresIn: (process.env.JWT_EXPIRES_IN || "7d") as any }
-    );
-
+    const token = signJWT(user.id, user.username);
     res.json({ success: true, token, username: user.username });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ error: "Verification code and temporary token are required" });
+      res.status(400).json({ error: "A valid 6-digit code is required" });
       return;
     }
-    res.status(500).json({ error: err?.message || "Verification failed" });
+    console.error("Verify-2FA error:", err);
+    res.status(500).json({ error: "Verification failed. Please try again." });
   }
 });
 
@@ -273,26 +309,20 @@ router.post("/resend-2fa", authLimiter, async (req: Request, res: Response) => {
     pending.expiresAt = Date.now() + 10 * 60 * 1000;
     pendingOTPs.set(tempToken, pending);
 
-    const adminEmail = process.env.ADMIN_EMAIL || process.env.REPLY_EMAIL || "admin@nishanth.qzz.io";
-
+    const adminEmail = process.env.ADMIN_EMAIL || "admin@nishanth.qzz.io";
     await sendEmail({
       to: adminEmail,
-      subject: "🔐 Admin Login — 2-Step Verification Code (Resent)",
+      subject: "🔐 Admin Login — New Verification Code",
       html: `
-        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #09090b; padding: 32px; color: #ffffff; border-radius: 16px; max-width: 480px; margin: 0 auto; border: 1px solid #27272a;">
-          <div style="text-align: center; margin-bottom: 24px;">
-            <h2 style="color: #FF6B2B; margin: 0; font-size: 24px; font-weight: 700;">NP Admin CMS</h2>
-            <p style="color: #71717a; font-size: 13px; margin-top: 4px;">2-Step Verification Code (Resent)</p>
+        <div style="font-family:'Segoe UI',sans-serif;background:#09090b;padding:32px;color:#fff;border-radius:16px;max-width:480px;margin:0 auto;border:1px solid #27272a;">
+          <div style="text-align:center;margin-bottom:24px;">
+            <h2 style="color:#FF6B2B;margin:0;font-size:24px;font-weight:700;">NP Admin CMS</h2>
+            <p style="color:#71717a;font-size:13px;margin-top:4px;">New Verification Code</p>
           </div>
-          <p style="color: #a1a1aa; font-size: 14px; line-height: 1.5; margin-bottom: 20px;">
-            Your new verification code is:
-          </p>
-          <div style="background: #18181b; border: 1px solid #FF6B2B; font-size: 36px; font-weight: 800; letter-spacing: 10px; color: #FF6B2B; padding: 20px; text-align: center; border-radius: 12px; margin: 24px 0;">
+          <div style="background:#18181b;border:1px solid #FF6B2B;font-size:36px;font-weight:800;letter-spacing:10px;color:#FF6B2B;padding:20px;text-align:center;border-radius:12px;margin:24px 0;">
             ${newCode}
           </div>
-          <p style="color: #71717a; font-size: 12px; line-height: 1.5;">
-            This code will expire in <strong>10 minutes</strong>.
-          </p>
+          <p style="color:#71717a;font-size:12px;">Expires in <strong>10 minutes</strong>.</p>
         </div>
       `,
     });
@@ -303,12 +333,12 @@ router.post("/resend-2fa", authLimiter, async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/auth/me
+// GET /api/auth/me — validate current token
 router.get("/me", authenticate, (req: AuthRequest, res: Response) => {
   res.json({ id: req.adminId, username: req.adminUsername });
 });
 
-// POST /api/auth/logout (client-side only)
+// POST /api/auth/logout
 router.post("/logout", (_req: Request, res: Response) => {
   res.json({ success: true, message: "Logged out" });
 });
