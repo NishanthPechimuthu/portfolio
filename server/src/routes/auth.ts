@@ -32,7 +32,7 @@ interface PendingOTP {
 const pendingOTPs = new Map<string, PendingOTP>();
 
 // Helper function to verify TOTP code using RFC 6238 HMAC-SHA1
-function verifyTOTP(secret: string, token: string): boolean {
+export function verifyTOTP(secret: string, token: string): boolean {
   try {
     const period = 30;
     const now = Math.floor(Date.now() / 1000);

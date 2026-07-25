@@ -9,6 +9,7 @@ import { uploadImage, uploadFile, getFileUrl } from "../middleware/upload";
 import { slugify, generateShareKey, paginate } from "../utils/helpers";
 import { sendEmail } from "../utils/email";
 import axios from "axios";
+import { verifyTOTP } from "./auth";
 
 const router = Router();
 router.use(authenticate);
@@ -70,6 +71,24 @@ router.put("/settings", async (req: Request, res: Response) => {
     await prisma.siteSetting.upsert({ where: { settingKey: key }, update: { settingValue: value }, create: { settingKey: key, settingValue: value } });
   }
   res.json({ success: true });
+});
+
+router.post("/test-totp", async (req: Request, res: Response) => {
+  try {
+    const { secret, code } = z.object({
+      secret: z.string().min(1),
+      code: z.string().min(1),
+    }).parse(req.body);
+
+    const isValid = verifyTOTP(secret, code);
+    if (isValid) {
+      res.json({ success: true, message: "TOTP 6-digit code verified successfully!" });
+    } else {
+      res.status(400).json({ error: "Invalid TOTP code. Please check your Authenticator app time and secret." });
+    }
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || "Invalid input" });
+  }
 });
 
 // ── THEME ─────────────────────────────────────────────────────────────────────
