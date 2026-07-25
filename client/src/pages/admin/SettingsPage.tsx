@@ -170,17 +170,31 @@ export default function SettingsPage() {
                   onClick={handleGenerateTotp}
                   className="px-4 py-3 bg-zinc-800 border border-zinc-700 hover:border-brand text-zinc-300 hover:text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" /> Generate Secret
+                  <RefreshCw className="w-3.5 h-3.5" /> Generate New Secret
                 </button>
                 {currentSecret && (
-                  <button
-                    type="button"
-                    onClick={handleCopySecret}
-                    className="px-4 py-3 bg-zinc-800 border border-zinc-700 hover:border-brand text-zinc-300 hover:text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors"
-                  >
-                    {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copied ? 'Copied' : 'Copy'}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCopySecret}
+                      className="px-4 py-3 bg-zinc-800 border border-zinc-700 hover:border-brand text-zinc-300 hover:text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors"
+                    >
+                      {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied ? 'Copied' : 'Copy'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({ ...formData, totp_secret: '' })
+                        setVerifiedSuccess(false)
+                        setTestCode('')
+                        toast.info('TOTP Secret removed. Click "Save Settings" below to disable TOTP.')
+                      }}
+                      className="px-4 py-3 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors"
+                    >
+                      Remove TOTP
+                    </button>
+                  </>
                 )}
               </div>
               <p className="text-xs text-zinc-500 mt-2">

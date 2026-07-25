@@ -6,8 +6,8 @@ import api from '@/lib/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ShieldCheck, KeyRound, ArrowRight, RefreshCw, Mail, Smartphone } from 'lucide-react'
 
-type Step = 'credentials' | 'choose-method' | 'verify'
-type Method = 'email' | 'totp'
+type Step = 'credentials' | 'verify'
+type Method = 'totp' | 'email'
 
 export default function AdminLoginPage() {
   const [step, setStep] = useState<Step>('credentials')
@@ -17,7 +17,7 @@ export default function AdminLoginPage() {
   const [tempToken, setTempToken] = useState('')
   const [destinationEmail, setDestinationEmail] = useState('')
   const [hasTOTP, setHasTOTP] = useState(false)
-  const [method, setMethod] = useState<Method>('email')
+  const [method, setMethod] = useState<Method>('totp')
   const [loading, setLoading] = useState(false)
   const [resending, setResending] = useState(false)
 
@@ -38,8 +38,20 @@ export default function AdminLoginPage() {
       if (data.requires2FA) {
         setTempToken(data.tempToken || '')
         setDestinationEmail(data.destinationEmail || 'your email')
-        setHasTOTP(data.hasTOTP !== false)
-        setStep('choose-method')
+        const isTotpAvailable = !!data.hasTOTP
+        setHasTOTP(isTotpAvailable)
+
+        if (isTotpAvailable) {
+          // Default 2FA is TOTP (Authenticator App)
+          setMethod('totp')
+          setStep('verify')
+          toast.info('Enter the 6-digit code from your Authenticator App.')
+        } else {
+          // If TOTP not enabled, default to Email OTP
+          setMethod('email')
+          await sendEmailCode(data.tempToken)
+          setStep('verify')
+        }
       } else if (data.success && data.token && data.username) {
         login(data.token, data.username)
         toast.success(`Welcome back, ${data.username}!`)
@@ -69,24 +81,25 @@ export default function AdminLoginPage() {
     }
   }
 
-  // Step 1.5: Choose method
-  async function handleChooseMethod(chosen: Method) {
-    setMethod(chosen)
-    if (chosen === 'email') {
-      setLoading(true)
-      try {
-        await sendEmailCode()
-        setStep('verify')
-      } catch {
-        // error already toasted
-      } finally {
-        setLoading(false)
-      }
-    } else {
-      // TOTP — go straight to verify (no need to send anything)
-      setStep('verify')
-      toast.info('Open your Authenticator App and enter the 6-digit code.')
+  // Switch to Email OTP
+  async function handleSwitchToEmail() {
+    setLoading(true)
+    try {
+      await sendEmailCode()
+      setMethod('email')
+      setCode('')
+    } catch {
+      // error handled inside sendEmailCode
+    } finally {
+      setLoading(false)
     }
+  }
+
+  // Switch back to TOTP
+  function handleSwitchToTOTP() {
+    setMethod('totp')
+    setCode('')
+    toast.info('Switched to Authenticator App. Enter code from Google Authenticator / Authy.')
   }
 
   // Step 2: Verify the code (email OTP or TOTP)
@@ -111,7 +124,7 @@ export default function AdminLoginPage() {
         toast.error('Verification failed. Please try again.')
       }
     } catch (err: any) {
-      const msg = err?.response?.data?.error || 'Invalid code. Please try again.'
+      const msg = err?.response?.data?.error || 'Invalid code. Please check and try again.'
       toast.error(msg)
       setCode('')
     } finally {
@@ -119,7 +132,7 @@ export default function AdminLoginPage() {
     }
   }
 
-  // Resend email OTP (only relevant in email mode)
+  // Resend email OTP
   async function handleResend() {
     if (!tempToken) return
     setResending(true)
@@ -127,7 +140,7 @@ export default function AdminLoginPage() {
       await sendEmailCode()
       setCode('')
     } catch {
-      // error already toasted
+      // error handled inside sendEmailCode
     } finally {
       setResending(false)
     }
@@ -192,74 +205,12 @@ export default function AdminLoginPage() {
                 disabled={loading || !username.trim() || !password}
                 className="w-full mt-7 shimmer bg-brand text-white font-semibold text-sm py-3.5 rounded-xl hover:bg-brand-dark transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {loading ? 'Verifying...' : <>Continue <ArrowRight className="w-4 h-4" /></>}
+                {loading ? 'Verifying...' : <>Sign in <ArrowRight className="w-4 h-4" /></>}
               </button>
             </motion.form>
           )}
 
-          {/* ── Step 1.5: Choose 2FA Method ──────────────────── */}
-          {step === 'choose-method' && (
-            <motion.div
-              key="choose-method"
-              initial={{ opacity: 0, scale: 0.97 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.97 }}
-              className="bg-zinc-900/80 backdrop-blur-xl rounded-3xl p-8 border border-zinc-800"
-            >
-              <div className="w-12 h-12 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand mb-6 mx-auto">
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <h1 className="font-bold text-xl text-white text-center mb-2">2-Step Verification</h1>
-              <p className="text-zinc-400 text-xs text-center mb-7 leading-relaxed">
-                Choose how you want to verify your identity
-              </p>
-
-              <div className="space-y-3">
-                {/* Email OTP */}
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => handleChooseMethod('email')}
-                  className="w-full flex items-center gap-4 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-brand/50 rounded-2xl px-5 py-4 transition-all group disabled:opacity-50"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand shrink-0 group-hover:bg-brand/20 transition-colors">
-                    <Mail className="w-5 h-5" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-white text-sm font-semibold">Email OTP</p>
-                    <p className="text-zinc-500 text-xs mt-0.5">Send a code to {destinationEmail}</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-brand ml-auto transition-colors" />
-                </button>
-
-                {/* Authenticator App (TOTP) */}
-                <button
-                  type="button"
-                  onClick={() => handleChooseMethod('totp')}
-                  className="w-full flex items-center gap-4 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-brand/50 rounded-2xl px-5 py-4 transition-all group"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand shrink-0 group-hover:bg-brand/20 transition-colors">
-                    <Smartphone className="w-5 h-5" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-white text-sm font-semibold">Authenticator App</p>
-                    <p className="text-zinc-500 text-xs mt-0.5">Use Google Authenticator or Authy</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-zinc-600 group-hover:text-brand ml-auto transition-colors" />
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => { setStep('credentials'); setCode(''); setTempToken('') }}
-                className="mt-6 w-full text-center text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-              >
-                ← Back to login
-              </button>
-            </motion.div>
-          )}
-
-          {/* ── Step 2: Enter Code ───────────────────────────── */}
+          {/* ── Step 2: 2FA Code Input (Default TOTP, with Email option) ── */}
           {step === 'verify' && (
             <motion.form
               key="verify"
@@ -270,16 +221,16 @@ export default function AdminLoginPage() {
               className="bg-zinc-900/80 backdrop-blur-xl rounded-3xl p-8 border border-zinc-800"
             >
               <div className="w-12 h-12 rounded-2xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand mb-6 mx-auto">
-                {method === 'email' ? <Mail className="w-6 h-6" /> : <Smartphone className="w-6 h-6" />}
+                {method === 'totp' ? <Smartphone className="w-6 h-6" /> : <Mail className="w-6 h-6" />}
               </div>
 
               <h1 className="font-bold text-xl text-white text-center mb-2">
-                {method === 'email' ? 'Check Your Email' : 'Authenticator Code'}
+                {method === 'totp' ? 'Authenticator App' : 'Check Your Email'}
               </h1>
               <p className="text-zinc-400 text-xs text-center mb-6 leading-relaxed">
-                {method === 'email'
-                  ? <>Enter the 6-digit code sent to <span className="text-brand font-medium">{destinationEmail}</span></>
-                  : 'Enter the 6-digit code from your Authenticator App'
+                {method === 'totp'
+                  ? 'Enter the 6-digit code from Google Authenticator or Authy'
+                  : <>Enter the 6-digit code sent to <span className="text-brand font-medium">{destinationEmail}</span></>
                 }
               </p>
 
@@ -308,31 +259,49 @@ export default function AdminLoginPage() {
                 {loading ? 'Verifying...' : 'Verify & Sign In →'}
               </button>
 
-              <div className="mt-5 pt-4 border-t border-zinc-800 flex items-center justify-between text-xs">
-                {method === 'email' ? (
+              {/* Alternative method button */}
+              <div className="mt-5 pt-4 border-t border-zinc-800 space-y-3">
+                {method === 'totp' ? (
                   <button
                     type="button"
-                    onClick={handleResend}
-                    disabled={resending}
-                    className="text-zinc-400 hover:text-brand transition-colors flex items-center gap-1"
+                    onClick={handleSwitchToEmail}
+                    disabled={loading}
+                    className="w-full py-2.5 px-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-brand/40 text-zinc-300 hover:text-white rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${resending ? 'animate-spin' : ''}`} />
-                    {resending ? 'Sending...' : 'Resend code'}
+                    <Mail className="w-4 h-4 text-brand" /> Send code via Email instead
                   </button>
                 ) : (
-                  <span />
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      disabled={resending}
+                      className="text-zinc-400 hover:text-brand transition-colors flex items-center gap-1 text-xs"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${resending ? 'animate-spin' : ''}`} />
+                      {resending ? 'Sending...' : 'Resend email code'}
+                    </button>
+                    {hasTOTP && (
+                      <button
+                        type="button"
+                        onClick={handleSwitchToTOTP}
+                        className="text-brand hover:underline transition-all text-xs font-medium flex items-center gap-1"
+                      >
+                        <Smartphone className="w-3.5 h-3.5" /> Use Authenticator App
+                      </button>
+                    )}
+                  </div>
                 )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCode('')
-                    // If both methods available, go back to chooser; else go to credentials
-                    setStep(hasTOTP ? 'choose-method' : 'credentials')
-                  }}
-                  className="text-zinc-400 hover:text-white transition-colors"
-                >
-                  ← Back
-                </button>
+
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setStep('credentials'); setCode(''); setTempToken('') }}
+                    className="text-zinc-500 hover:text-zinc-300 text-xs transition-colors"
+                  >
+                    ← Back to sign in
+                  </button>
+                </div>
               </div>
             </motion.form>
           )}
