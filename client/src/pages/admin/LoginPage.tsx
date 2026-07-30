@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from 'sonner'
 import api from '@/lib/api'
-import {m as motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { KeyRound, ArrowRight, RefreshCw, Mail, Smartphone } from 'lucide-react'
 
 type Step = 'credentials' | 'verify'
