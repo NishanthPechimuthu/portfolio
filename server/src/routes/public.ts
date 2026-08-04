@@ -242,8 +242,30 @@ router.post("/share/:key/download", async (req: Request, res: Response) => {
     const fp = path.join(process.env.UPLOAD_DIR || "./uploads", file.filename);
     if (!fs.existsSync(fp)) { res.status(404).json({ error: "File missing from server" }); return; }
 
+    // Determine safe Content-Type from extension
+    const ext = path.extname(file.originalName).toLowerCase();
+    const SAFE_MIME_MAP: Record<string, string> = {
+      ".pdf": "application/pdf",
+      ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+      ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml",
+      ".txt": "text/plain", ".csv": "text/csv", ".md": "text/markdown",
+      ".json": "application/json",
+      ".zip": "application/zip",
+      ".doc": "application/msword",
+      ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      ".mp4": "video/mp4", ".webm": "video/webm",
+      ".mp3": "audio/mpeg", ".wav": "audio/wav",
+    };
+    const contentType = SAFE_MIME_MAP[ext] || "application/octet-stream";
+
     res.setHeader("Content-Disposition", `attachment; filename="${file.originalName}"`);
+    res.setHeader("Content-Type", contentType);
     res.setHeader("Content-Length", file.fileSize);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Download-Options", "noopen");
+    res.setHeader("Cache-Control", "private, no-cache");
     fs.createReadStream(fp).pipe(res);
   } catch {
     res.status(500).json({ error: "Download failed" });
@@ -263,9 +285,8 @@ router.get("/nav", async (_req: Request, res: Response) => {
 // GET /api/public/settings
 router.get("/settings", async (_req: Request, res: Response) => {
   try {
-    const settings = await prisma.siteSetting.findMany();
-    const settingsMap = Object.fromEntries(settings.map((s) => [s.settingKey, s.settingValue]));
-    res.json(settingsMap);
+    const rows = await prisma.siteSetting.findMany();
+    res.json(Object.fromEntries(rows.map((r) => [r.settingKey, r.settingValue])));
   } catch {
     res.status(500).json({ error: "Failed to fetch public settings" });
   }
@@ -274,10 +295,28 @@ router.get("/settings", async (_req: Request, res: Response) => {
 // GET /api/public/resume/download
 router.get("/resume/download", async (req: Request, res: Response) => {
   try {
+    // Prefer serving the pre-compiled PDF from disk
+    const uploadDir = process.env.UPLOAD_DIR || "./uploads";
+    const pdfPath = path.join(uploadDir, "resume_latex.pdf");
+
+    if (fs.existsSync(pdfPath)) {
+      const isInline = req.query.inline === 'true';
+      const stat = fs.statSync(pdfPath);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `${isInline ? 'inline' : 'attachment'}; filename="Nishanth-Pechimuthu-Resume.pdf"`);
+      res.setHeader("Content-Length", stat.size);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("X-Download-Options", "noopen");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      fs.createReadStream(pdfPath).pipe(res);
+      return;
+    }
+
+    // Fallback: compile on the fly if no pre-compiled PDF exists
     const latexSetting = await prisma.siteSetting.findUnique({ where: { settingKey: "resume_latex" } });
     const latexCode = latexSetting?.settingValue;
     if (!latexCode) {
-      res.status(404).json({ error: "LaTeX resume content not found" });
+      res.status(404).json({ error: "Resume not available" });
       return;
     }
 
@@ -287,18 +326,19 @@ router.get("/resume/download", async (req: Request, res: Response) => {
       engine: "pdflatex",
       return: "pdf"
     }, {
-      headers: {
-        "Content-Type": "multipart/form-data"
-      },
+      headers: { "Content-Type": "multipart/form-data" },
       responseType: "stream"
     });
 
     const isInline = req.query.inline === 'true';
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `${isInline ? 'inline' : 'attachment'}; filename="resume.pdf"`);
+    res.setHeader("Content-Disposition", `${isInline ? 'inline' : 'attachment'}; filename="Nishanth-Pechimuthu-Resume.pdf"`);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Download-Options", "noopen");
+    res.setHeader("Cache-Control", "public, max-age=3600");
     response.data.pipe(res);
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to compile LaTeX: " + err.message });
+    res.status(500).json({ error: "Failed to serve resume PDF" });
   }
 });
 

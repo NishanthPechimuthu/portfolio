@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import { prisma } from "../utils/prisma";
 import { authenticate } from "../middleware/auth";
-import { uploadImage, uploadFile, getFileUrl } from "../middleware/upload";
+import { uploadImage, uploadFile, uploadShareFile, getFileUrl } from "../middleware/upload";
 import { slugify, generateShareKey, paginate } from "../utils/helpers";
 import { sendEmail } from "../utils/email";
 import axios from "axios";
@@ -36,7 +36,10 @@ router.get("/settings", async (_req: Request, res: Response) => {
 
 router.put("/settings", async (req: Request, res: Response) => {
   const data: Record<string, string> = req.body;
-  
+
+  // resume_pdf_url is auto-generated from LaTeX — never accept it from client
+  delete data.resume_pdf_url;
+
   if (data.resume_latex && data.resume_latex.trim().length > 0) {
     try {
       const response = await axios.post("https://texlive.net/cgi-bin/latexcgi", {
@@ -53,11 +56,12 @@ router.put("/settings", async (req: Request, res: Response) => {
       if (buffer.toString('utf8', 0, 5) === '%PDF-') {
         const uploadDir = process.env.UPLOAD_DIR || "./uploads";
         if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-        
+
         const pdfFileName = "resume_latex.pdf";
         const pdfPath = path.join(uploadDir, pdfFileName);
         fs.writeFileSync(pdfPath, buffer);
-        
+
+        // Auto-set the PDF URL from successful compilation
         data.resume_pdf_url = `/uploads/${pdfFileName}`;
       } else {
         throw new Error("LaTeX compilation failed due to syntax errors.");
@@ -393,7 +397,7 @@ router.get("/share", async (_req: Request, res: Response) => {
   res.json(files.map((f) => ({ ...f, isProtected: !!f.passwordHash, passwordHash: undefined })));
 });
 
-router.post("/share", uploadFile("temp_share").single("file"), async (req: Request, res: Response) => {
+router.post("/share", uploadShareFile("temp_share").single("file"), async (req: Request, res: Response) => {
   try {
     if (!req.file) { res.status(400).json({ error: "No file uploaded" }); return; }
     const password = req.body.password as string | undefined;

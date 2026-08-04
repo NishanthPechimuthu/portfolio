@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { Save, FileText } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Save, FileText, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 import api from '@/lib/api'
 import { toast } from 'sonner'
 
 export default function ResumePage() {
+  const queryClient = useQueryClient()
   const [form, setForm] = useState({
-    resume_pdf_url: '',
-    resume_markdown: '',
     resume_latex: '',
     resume_theme_icons: 'true',
     resume_theme_colors: 'true'
   })
+  const [compileStatus, setCompileStatus] = useState<'idle' | 'compiling' | 'success' | 'error'>('idle')
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -21,25 +21,45 @@ export default function ResumePage() {
   useEffect(() => {
     if (data) {
       setForm({
-        resume_pdf_url: data.resume_pdf_url || '',
-        resume_markdown: data.resume_markdown || '',
         resume_latex: data.resume_latex || '',
         resume_theme_icons: data.resume_theme_icons || 'true',
         resume_theme_colors: data.resume_theme_colors || 'true'
       })
+      // If we have a PDF URL, show success status
+      if (data.resume_pdf_url) {
+        setCompileStatus('success')
+      }
     }
   }, [data])
 
   const mutation = useMutation({
-    mutationFn: (newSettings: typeof form) => api.put('/settings', newSettings),
-    onSuccess: () => toast.success('Resume settings saved successfully'),
-    onError: () => toast.error('Failed to save resume settings')
+    mutationFn: async (newSettings: typeof form) => {
+      setCompileStatus('compiling')
+      return api.put('/settings', newSettings)
+    },
+    onSuccess: () => {
+      setCompileStatus('success')
+      toast.success('Resume saved & PDF compiled successfully')
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
+    onError: (err: any) => {
+      setCompileStatus('error')
+      const msg = err.response?.data?.error || 'Failed to compile LaTeX'
+      toast.error(msg)
+    }
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!form.resume_latex.trim()) {
+      toast.error('Please enter LaTeX code before saving')
+      return
+    }
     mutation.mutate(form)
   }
+
+  const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api'
+  const previewUrl = `${apiUrl}/public/resume/download?inline=true&t=${Date.now()}`
 
   if (isLoading) return <div className="p-8">Loading...</div>
 
@@ -51,7 +71,7 @@ export default function ResumePage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-foreground">Resume Manager</h1>
-          <p className="text-muted-foreground text-sm">Manage your interactive web resume and ATS PDF download.</p>
+          <p className="text-muted-foreground text-sm">Write LaTeX code and auto-generate your resume PDF.</p>
         </div>
       </div>
 
@@ -84,51 +104,36 @@ export default function ResumePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Resume PDF (Overleaf Export)</label>
-            <p className="text-xs text-muted-foreground mb-2">Upload your Overleaf PDF to display on the web and for downloads.</p>
-            <div className="space-y-3">
-              <input 
-                type="file"
-                accept="application/pdf"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const fd = new FormData();
-                  fd.append('file', file);
-                  fd.append('subdir', 'resume');
-                  try {
-                    const res = await api.post('/upload/file', fd);
-                    setForm({ ...form, resume_pdf_url: res.data.url });
-                    toast.success('PDF uploaded successfully');
-                  } catch (err) {
-                    toast.error('PDF upload failed');
-                  }
-                }}
-                className="w-full bg-muted border border-border text-foreground text-sm rounded-lg px-4 py-2 focus:outline-none focus:border-brand file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand/10 file:text-brand hover:file:bg-brand/20 cursor-pointer"
-              />
-              <input 
-                type="text"
-                value={form.resume_pdf_url}
-                onChange={e => setForm({...form, resume_pdf_url: e.target.value})}
-                className="w-full bg-muted border border-border rounded-lg px-4 py-3 text-sm text-foreground focus:outline-none focus:border-brand"
-                placeholder="Or paste PDF URL..."
-              />
-            </div>
-            {form.resume_pdf_url && (
-              <div className="mt-4 p-4 border border-border rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
-                <iframe src={form.resume_pdf_url} className="w-full h-[300px] rounded" title="PDF Preview" />
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-foreground">Resume LaTeX Source</label>
+              <div className="flex items-center gap-2 text-xs">
+                {compileStatus === 'compiling' && (
+                  <span className="flex items-center gap-1 text-amber-500">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Compiling...
+                  </span>
+                )}
+                {compileStatus === 'success' && (
+                  <span className="flex items-center gap-1 text-emerald-500">
+                    <CheckCircle className="w-3.5 h-3.5" /> PDF compiled
+                  </span>
+                )}
+                {compileStatus === 'error' && (
+                  <span className="flex items-center gap-1 text-red-500">
+                    <AlertCircle className="w-3.5 h-3.5" /> Compilation failed
+                  </span>
+                )}
               </div>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Resume LaTeX Code (Optional Fallback)</label>
-            <p className="text-xs text-muted-foreground mb-2">Write your raw LaTeX code here. This will be compiled on the fly when downloaded if no PDF is provided.</p>
+            </div>
+            <p className="text-xs text-muted-foreground mb-2">Paste your full LaTeX document here. When you save, it will be compiled to PDF automatically via texlive.net.</p>
             <textarea 
-              rows={6}
+              rows={18}
               value={form.resume_latex}
-              onChange={e => setForm({...form, resume_latex: e.target.value})}
-              className="w-full bg-muted border border-border rounded-lg px-4 py-3 text-sm font-mono text-foreground"
-              placeholder="\documentclass{article}&#10;\begin{document}&#10;...&#10;\end{document}"
+              onChange={e => {
+                setForm({...form, resume_latex: e.target.value})
+                if (compileStatus !== 'idle') setCompileStatus('idle')
+              }}
+              className="w-full bg-muted border border-border rounded-lg px-4 py-3 text-sm font-mono text-foreground focus:outline-none focus:border-brand resize-y"
+              placeholder={'\\documentclass{article}\n\\begin{document}\n  Your resume content here...\n\\end{document}'}
             />
           </div>
         </div>
@@ -139,10 +144,28 @@ export default function ResumePage() {
             disabled={mutation.isPending}
             className="flex items-center gap-2 bg-brand text-white px-6 py-2.5 rounded-lg font-medium hover:bg-brand-dark transition-colors disabled:opacity-50"
           >
-            <Save className="w-4 h-4" /> Save Resume Settings
+            {mutation.isPending ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Compiling & Saving...</>
+            ) : (
+              <><Save className="w-4 h-4" /> Save & Compile PDF</>
+            )}
           </button>
         </div>
       </form>
+
+      {/* PDF Preview */}
+      {compileStatus === 'success' && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-foreground mb-3">Generated PDF Preview</h2>
+          <div className="border border-border rounded-xl overflow-hidden bg-zinc-50 dark:bg-zinc-800/50 p-1">
+            <iframe 
+              src={previewUrl} 
+              className="w-full h-[600px] rounded-lg" 
+              title="Resume PDF Preview" 
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

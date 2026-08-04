@@ -69,8 +69,13 @@ app.use(
   })
 );
 
-// ── Static Uploads ────────────────────────────────────────────────────────────
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+// ── Static Uploads (with security headers) ────────────────────────────────────
+app.use("/uploads", (_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Download-Options", "noopen");
+  res.setHeader("Content-Security-Policy", "default-src 'none'");
+  next();
+}, express.static(path.join(__dirname, "../uploads")));
 
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {

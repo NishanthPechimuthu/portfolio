@@ -11,13 +11,19 @@ export default function ResumeViewPage() {
 
   useEffect(() => {
     if (!isLoading) {
-      const isExternal = settings.resume_pdf_url?.startsWith('http')
       const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api'
-      const pdfUrl = settings.resume_pdf_url
-        ? (isExternal ? settings.resume_pdf_url : `${apiUrl.replace('/api', '')}${settings.resume_pdf_url}`)
-        : `${apiUrl}/public/resume/download`
 
-      window.location.replace(pdfUrl)
+      // If a pre-compiled PDF URL exists (local path like /uploads/resume_latex.pdf)
+      if (settings.resume_pdf_url) {
+        const isExternal = settings.resume_pdf_url.startsWith('http')
+        const pdfUrl = isExternal
+          ? settings.resume_pdf_url
+          : `${apiUrl.replace('/api', '')}${settings.resume_pdf_url}`
+        window.location.replace(pdfUrl)
+      } else {
+        // Fallback to the download endpoint which serves inline
+        window.location.replace(`${apiUrl}/public/resume/download?inline=true`)
+      }
     }
   }, [isLoading, settings.resume_pdf_url])
 
