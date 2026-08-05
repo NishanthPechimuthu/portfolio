@@ -1,4 +1,12 @@
+# robots.txt — nishanth.qzz.io
+# https://developers.google.com/search/docs/crawling-indexing/robots/intro
+
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /admin/*
+Disallow: /api/
+Disallow: /uploads/temp_share/
 
+# Sitemap
 Sitemap: https://nishanth.qzz.io/api/public/sitemap.xml
