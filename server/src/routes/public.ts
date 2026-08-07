@@ -303,7 +303,7 @@ router.get("/resume/download", async (req: Request, res: Response) => {
       const isInline = req.query.inline === 'true';
       const stat = fs.statSync(pdfPath);
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `${isInline ? 'inline' : 'attachment'}; filename="Nishanth-Pechimuthu-Resume.pdf"`);
+      res.setHeader("Content-Disposition", `${isInline ? 'inline' : 'attachment'}; filename="Nishanth-P-Resume.pdf"`);
       res.setHeader("Content-Length", stat.size);
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("X-Download-Options", "noopen");
@@ -332,7 +332,7 @@ router.get("/resume/download", async (req: Request, res: Response) => {
 
     const isInline = req.query.inline === 'true';
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `${isInline ? 'inline' : 'attachment'}; filename="Nishanth-Pechimuthu-Resume.pdf"`);
+    res.setHeader("Content-Disposition", `${isInline ? 'inline' : 'attachment'}; filename="Nishanth-P-Resume.pdf"`);
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Download-Options", "noopen");
     res.setHeader("Cache-Control", "public, max-age=3600");

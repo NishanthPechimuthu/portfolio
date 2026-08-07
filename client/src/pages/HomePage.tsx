@@ -168,7 +168,7 @@ export default function HomePage() {
   const {
     hero, services = [], featuredProjects = [], about, skills = [],
     testimonials = [], blogPosts = [], experiences = [], educations = [],
-    featuredCerts = [], contactSection, contactLinks = [], stats, settings
+    featuredCerts = [], contactSection, contactLinks = [], stats
   } = data || {}
 
   const TECH_ICONS = [
@@ -290,11 +290,7 @@ export default function HomePage() {
 
                 <MagneticButton>
                   <a
-                    href={settings?.resume_pdf_url
-                      ? (settings.resume_pdf_url.startsWith('http')
-                        ? settings.resume_pdf_url
-                        : `${((import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api').replace('/api', '')}${settings.resume_pdf_url}`)
-                      : `${(import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api'}/public/resume/download`}
+                    href={`${(import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api'}/public/resume/download`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 border border-border text-brand font-medium px-7 py-3.5 rounded-full hover:bg-brand/10 hover:border-brand/30 transition-colors text-sm"
