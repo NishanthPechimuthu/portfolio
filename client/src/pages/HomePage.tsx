@@ -289,14 +289,12 @@ export default function HomePage() {
                 </MagneticButton>
 
                 <MagneticButton>
-                  <a
-                    href={`${(import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api'}/public/resume/download`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <Link
+                    to="/resume"
                     className="inline-flex items-center gap-2 border border-border text-brand font-medium px-7 py-3.5 rounded-full hover:bg-brand/10 hover:border-brand/30 transition-colors text-sm"
                   >
                     Resume <Download className="w-4 h-4" />
-                  </a>
+                  </Link>
                 </MagneticButton>
               </motion.div>
 
