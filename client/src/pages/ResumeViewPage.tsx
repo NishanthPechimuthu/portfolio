@@ -8,8 +8,28 @@ export default function ResumeViewPage() {
   const pdfUrl = `${apiUrl}/public/resume/download?inline=true`
   const downloadUrl = `${apiUrl}/public/resume/download`
 
+  const handleDownload = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    try {
+      const response = await fetch(downloadUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Nishanth-P-Resume.pdf';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Failed to download PDF', err);
+      // Fallback
+      window.open(downloadUrl, '_blank');
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col">
+    <div className="h-[100dvh] bg-zinc-950 flex flex-col">
       {/* Header */}
       <div className="h-16 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-2">
@@ -17,8 +37,8 @@ export default function ResumeViewPage() {
           <h1 className="text-zinc-100 font-medium">Nishanth-P-Resume.pdf</h1>
         </div>
         <a 
-          href={downloadUrl} 
-          download="Nishanth-P-Resume.pdf"
+          href={downloadUrl}
+          onClick={handleDownload}
           className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 px-4 py-2 bg-brand text-black hover:bg-brand/90 gap-2"
         >
           <Download className="w-4 h-4" />
